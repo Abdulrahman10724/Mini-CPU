@@ -11,6 +11,7 @@ Usage (from the project folder, on Windows):
   python tests/run_tests.py                      # look for CPU.exe automatically
   python tests/run_tests.py --exe path/to/CPU.exe
   python tests/run_tests.py 05_jnz_loop_sum      # run only tests whose name contains this
+  python tests/run_tests.py --mock               # test gui/mock_cpu.py (GUI development only)
 """
 
 import argparse
@@ -23,6 +24,7 @@ import sys
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(TESTS_DIR)
 WORK_DIR = os.path.join(TESTS_DIR, "_work")   # scratch folder, safe to delete
+MOCK_CPU = os.path.join(ROOT_DIR, "gui", "mock_cpu.py")
 
 # Places where Visual Studio usually puts the built exe.
 EXE_CANDIDATES = [
@@ -55,7 +57,7 @@ def read_lines(path):
     return lines
 
 
-def run_one(exe, name):
+def run_one(command, name):
     """Run a single test. Returns (passed, message)."""
     program_src = os.path.join(TESTS_DIR, name + ".txt")
     expected_path = os.path.join(TESTS_DIR, name + ".expected.txt")
@@ -70,7 +72,7 @@ def run_one(exe, name):
         shutil.copyfile(program_src, program_dst)   # byte-exact copy (keeps CRLF)
 
     try:
-        subprocess.run([exe], cwd=WORK_DIR, stdin=subprocess.DEVNULL,
+        subprocess.run(command, cwd=WORK_DIR, stdin=subprocess.DEVNULL,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                        timeout=10)
     except subprocess.TimeoutExpired:
@@ -93,23 +95,29 @@ def run_one(exe, name):
 def main():
     parser = argparse.ArgumentParser(description="Run Mini CPU tests")
     parser.add_argument("--exe", help="path to CPU.exe")
+    parser.add_argument("--mock", action="store_true",
+                        help="test gui/mock_cpu.py instead of CPU.exe (GUI development only)")
     parser.add_argument("filter", nargs="?", default="", help="only run tests containing this text")
     args = parser.parse_args()
 
-    exe = find_exe(args.exe)
-    if exe is None:
-        print("CPU.exe not found. Build it first, or pass --exe path\\to\\CPU.exe")
-        return 2
+    if args.mock:
+        command = [sys.executable, MOCK_CPU]
+    else:
+        exe = find_exe(args.exe)
+        if exe is None:
+            print("CPU.exe not found. Build it first, or pass --exe path\\to\\CPU.exe")
+            return 2
+        command = [exe]
 
     names = sorted(f[:-len(".expected.txt")] for f in os.listdir(TESTS_DIR)
                    if f.endswith(".expected.txt"))
     names = [n for n in names if args.filter in n]
 
     os.makedirs(WORK_DIR, exist_ok=True)
-    print("Using", exe)
+    print("Using", " ".join(command))
     passed = 0
     for name in names:
-        ok, msg = run_one(exe, name)
+        ok, msg = run_one(command, name)
         print(("PASS  " if ok else "FAIL  ") + name)
         if ok:
             passed += 1
