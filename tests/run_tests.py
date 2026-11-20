@@ -78,6 +78,9 @@ def run_one(exe, name):
 
     if not os.path.exists(result_path):
         return False, "CPU.exe did not create result.txt"
+    with open(result_path, "rb") as f:
+        if b"\r" in f.read():
+            return False, "result.txt contains CR (13) bytes; every line must end with LF only"
 
     expected = read_lines(expected_path)
     actual = read_lines(result_path)

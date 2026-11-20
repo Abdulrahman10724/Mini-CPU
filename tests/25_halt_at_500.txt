@@ -1,0 +1,4 @@
+MOV CX, 249
+DEC CX
+JNZ 2
+HLT
