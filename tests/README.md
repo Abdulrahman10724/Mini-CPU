@@ -27,3 +27,6 @@ Run on Windows after building CPU.exe:
 6. HLT and jumps count as steps (as in the CONTRACT example).
 7. Loop guard: after the 500th step, if not halted, `END LOOP 500`.
 8. Missing program.txt: `STATUS ERR`, `ERR 0 9`, `END ERRSTOP 0`.
+9. Arithmetic wraps around like a real 32-bit CPU (two's complement), with no error:
+   `2147483647 + 1 = -2147483648`. CMP sets ZF = 1 exactly when both values are equal.
+10. If HLT runs as step 500, the result is `END HALT 500` (HLT is checked before the guard).

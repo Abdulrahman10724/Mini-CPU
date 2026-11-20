@@ -25,6 +25,10 @@ MAX_TOKENS = 4        ; opcode + up to 3 operands (a 3rd operand means error 4)
 TOKEN_LEN  = 16       ; bytes per token: 15 chars + 0 terminator
 BUF_SIZE   = 4096     ; max bytes read from program.txt
 OUT_SIZE   = 40000    ; result.txt output buffer
+                      ; Size check: the longest STEP line is
+                      ; "STEP 500 50 -2147483648 -2147483648 -2147483648 -2147483648 1" + LF
+                      ; = 62 bytes, x 500 steps = 31000 bytes. Plus STATUS (11), up to 51 ERR
+                      ; lines (max 9 bytes each = 459) and END (max 15) -> about 31.5 KB < 40000.
 
 ; Name table sizes (Phase 3)
 NUM_OPCODES = 10      ; entries in opNames
@@ -137,6 +141,14 @@ endLoop      BYTE "LOOP",0
 outBuf       BYTE OUT_SIZE DUP(0)          ; the whole result.txt is built here
 outPos       DWORD 0                       ; next free position in outBuf
 numBuf       BYTE 16 DUP(0)                ; work buffer for IntToStr
+                                           ; (longest number "-2147483648" = 11 chars + 0)
+
+; Fixed words written into result.txt
+txtStatusOk  BYTE "STATUS OK",0
+txtStatusErr BYTE "STATUS ERR",0
+txtErr       BYTE "ERR",0
+txtStep      BYTE "STEP",0
+txtEnd       BYTE "END",0
 
 ; ---------------------------------------------------------------------
 ; Debug strings
@@ -162,6 +174,7 @@ dbgBX        BYTE " BX=",0
 dbgCX        BYTE " CX=",0
 dbgDX        BYTE " DX=",0
 dbgZF        BYTE " ZF=",0
+dbgNoWrite   BYTE "ERROR: cannot create result.txt",0
 
 .code
 
@@ -181,13 +194,18 @@ main PROC
     call ParseAllLines             ; check every line, fill instruction arrays
 SkipParse:
 
-    call DebugPrintLines           ; show what we read (only if DEBUG = 1)
-    call DebugPrintParsed          ; show what the parser found (only if DEBUG = 1)
+    call AppendStatusAndErrors     ; STATUS line + ERR lines (or the error-9 block)
 
     cmp  fileMissing, 1            ; no program -> nothing to run
     je   SkipExecute
-    call ExecuteProgram            ; run the program (prints each step if DEBUG = 1)
+    call ExecuteProgram            ; run it, adding one STEP line per instruction
 SkipExecute:
+
+    call AppendEndLine             ; END line
+    call WriteResultFile           ; write outBuf to result.txt in one go
+
+    call DebugPrintLines           ; show what we read (only if DEBUG = 1)
+    call DebugPrintParsed          ; show what the parser found (only if DEBUG = 1)
 
     exit                           ; Irvine32 macro for INVOKE ExitProcess, 0
 main ENDP
@@ -1143,7 +1161,7 @@ ExecuteInstruction ENDP
 ;           500-step guard. Empty lines are skipped (no step).
 ; Receives: lineCount, tooManyLines, lineErr, instruction arrays
 ; Returns:  endType, endValue
-; Changes:  regs, zeroFlag, pc, stepCount (and outBuf in Phase 5)
+; Changes:  regs, zeroFlag, pc, stepCount, outBuf, outPos
 ; Register use inside: EBX = index of the current line (pc - 1),
 ;                      EAX = next pc, ECX = 1 after HLT
 ; ---------------------------------------------------------------------
@@ -1195,7 +1213,8 @@ RunInstruction:
     ; ---- decode + execute ----
     call ExecuteInstruction        ; EAX = next pc, ECX = 1 if HLT
     inc  stepCount
-    call DebugPrintStep            ; pc still = the line just executed
+    call AppendStepLine            ; STEP line into outBuf (pc = line just executed)
+    call DebugPrintStep            ; same step on the console (only if DEBUG = 1)
 
     cmp  ecx, 1                    ; was it HLT?
     jne  CheckGuard
@@ -1283,5 +1302,314 @@ DebugPrintStep PROC USES eax edx
 Done:
     ret
 DebugPrintStep ENDP
+
+; =====================================================================
+; PHASE 5 - BUILDING AND WRITING result.txt
+; Everything is first appended to outBuf (in memory). WriteResultFile
+; then writes the whole buffer to result.txt with ONE WriteToFile call.
+; Every line ends with LF (10) only.
+; =====================================================================
+
+; ---------------------------------------------------------------------
+; IntToStr
+; Purpose:  Convert a signed 32-bit number to text, e.g. -15 -> "-15".
+;           (WriteDec/WriteInt can only print to the console, so we need
+;           our own conversion to put numbers into result.txt.)
+; Receives: EAX = signed value
+; Returns:  numBuf = the number as a 0-terminated string
+; Changes:  nothing else
+; Register use inside: EDI = write pointer in numBuf, ECX = digit count
+; ---------------------------------------------------------------------
+IntToStr PROC USES eax ebx ecx edx edi
+    mov  edi, OFFSET numBuf
+    cmp  eax, 0                    ; negative?
+    jge  NotNegative
+    mov  BYTE PTR [edi], '-'       ; write the minus sign first
+    inc  edi
+    neg  eax                       ; make it positive, e.g. -15 -> 15.
+    ; Special case: NEG of -2147483648 (80000000h) is 80000000h again, but
+    ; read as an UNSIGNED number that is exactly 2147483648, which is the
+    ; correct size. Because we use unsigned DIV below, the digits come out
+    ; right: "-2147483648".
+NotNegative:
+
+    ; ---- get the digits: they come out last digit first ----
+    mov  ecx, 0                    ; no digits yet
+    mov  ebx, 10
+DigitLoop:
+    mov  edx, 0                    ; DIV divides EDX:EAX, so clear EDX first
+    div  ebx                       ; EAX = EAX / 10, EDX = remainder (last digit)
+    push edx                       ; save the digit on the stack
+    inc  ecx
+    cmp  eax, 0                    ; more digits left? (0 still gives one digit "0")
+    jne  DigitLoop
+
+    ; ---- the stack gives the digits back in the right order ----
+WriteLoop:
+    pop  edx                       ; last pushed = first digit
+    add  dl, '0'                   ; number 7 -> char '7'
+    mov  [edi], dl
+    inc  edi
+    dec  ecx
+    jnz  WriteLoop
+
+    mov  BYTE PTR [edi], 0         ; terminate the string (max 11 chars + 0 fits in 16)
+    ret
+IntToStr ENDP
+
+; ---------------------------------------------------------------------
+; AppendChar
+; Purpose:  Add one character to the end of outBuf. If the buffer is
+;           full, the character is dropped (never write past outBuf).
+; Receives: AL = character, outPos
+; Returns:  nothing
+; Changes:  outBuf, outPos
+; ---------------------------------------------------------------------
+AppendChar PROC USES ebx
+    mov  ebx, outPos
+    cmp  ebx, OUT_SIZE             ; buffer full?
+    jae  Done
+    mov  outBuf[ebx], al           ; store the character
+    inc  outPos
+Done:
+    ret
+AppendChar ENDP
+
+; ---------------------------------------------------------------------
+; AppendString
+; Purpose:  Add a 0-terminated string to outBuf (without the 0).
+; Receives: ESI = address of the string
+; Returns:  nothing
+; Changes:  outBuf, outPos
+; ---------------------------------------------------------------------
+AppendString PROC USES eax esi
+NextChar:
+    mov  al, [esi]
+    cmp  al, 0                     ; end of the string?
+    je   Done
+    call AppendChar
+    inc  esi
+    jmp  NextChar
+Done:
+    ret
+AppendString ENDP
+
+; ---------------------------------------------------------------------
+; AppendNumber
+; Purpose:  Add a signed number as text to outBuf ("5", "-5", "0").
+; Receives: EAX = signed value
+; Returns:  nothing
+; Changes:  numBuf, outBuf, outPos
+; ---------------------------------------------------------------------
+AppendNumber PROC USES esi
+    call IntToStr                  ; numBuf = text of EAX
+    mov  esi, OFFSET numBuf
+    call AppendString
+    ret
+AppendNumber ENDP
+
+; ---------------------------------------------------------------------
+; AppendSpace
+; Purpose:  Add one space (the field separator) to outBuf.
+; Receives: nothing
+; Returns:  nothing
+; Changes:  outBuf, outPos
+; ---------------------------------------------------------------------
+AppendSpace PROC USES eax
+    mov  al, ' '
+    call AppendChar
+    ret
+AppendSpace ENDP
+
+; ---------------------------------------------------------------------
+; AppendNewline
+; Purpose:  End the current line in outBuf with LF (10) only, no CR.
+; Receives: nothing
+; Returns:  nothing
+; Changes:  outBuf, outPos
+; ---------------------------------------------------------------------
+AppendNewline PROC USES eax
+    mov  al, 10
+    call AppendChar
+    ret
+AppendNewline ENDP
+
+; ---------------------------------------------------------------------
+; AppendStatusAndErrors
+; Purpose:  Write the STATUS line and all ERR lines (ascending line
+;           number, line 51 included for error 7). If program.txt was
+;           missing, write "STATUS ERR" / "ERR 0 9" and set the end
+;           to ERRSTOP 0.
+; Receives: fileMissing, lineErr
+; Returns:  nothing
+; Changes:  outBuf, outPos (and endType, endValue if the file is missing)
+; Register use inside: EBX = lineErr index (0 .. MAX_LINES = line 1 .. 51)
+; ---------------------------------------------------------------------
+AppendStatusAndErrors PROC USES eax ebx esi
+    cmp  fileMissing, 1
+    jne  CheckForErrors
+
+    ; ---- program.txt missing: error 9 on line 0 ----
+    mov  esi, OFFSET txtStatusErr  ; "STATUS ERR"
+    call AppendString
+    call AppendNewline
+    mov  esi, OFFSET txtErr        ; "ERR 0 9"
+    call AppendString
+    call AppendSpace
+    mov  eax, 0
+    call AppendNumber
+    call AppendSpace
+    mov  eax, ERR_NO_FILE
+    call AppendNumber
+    call AppendNewline
+    mov  endType, END_ERRSTOP      ; the END line will be "END ERRSTOP 0"
+    mov  endValue, 0
+    jmp  Done
+
+CheckForErrors:
+    ; ---- is there any error at all? (indexes 0..50 = lines 1..51) ----
+    mov  ebx, 0
+ScanLoop:
+    cmp  ebx, MAX_LINES
+    ja   NoErrors                  ; checked all -> no errors
+    cmp  lineErr[ebx], 0
+    jne  HasErrors
+    inc  ebx
+    jmp  ScanLoop
+
+NoErrors:
+    mov  esi, OFFSET txtStatusOk   ; "STATUS OK"
+    call AppendString
+    call AppendNewline
+    jmp  Done
+
+HasErrors:
+    mov  esi, OFFSET txtStatusErr  ; "STATUS ERR"
+    call AppendString
+    call AppendNewline
+
+    ; ---- one "ERR <line> <code>" per error, in line order ----
+    mov  ebx, 0
+ErrLoop:
+    cmp  ebx, MAX_LINES
+    ja   Done
+    cmp  lineErr[ebx], 0           ; no error on this line -> skip
+    je   NextIndex
+    mov  esi, OFFSET txtErr        ; "ERR"
+    call AppendString
+    call AppendSpace
+    mov  eax, ebx
+    inc  eax                       ; line number = index + 1
+    call AppendNumber
+    call AppendSpace
+    movzx eax, lineErr[ebx]        ; error code
+    call AppendNumber
+    call AppendNewline
+NextIndex:
+    inc  ebx
+    jmp  ErrLoop
+
+Done:
+    ret
+AppendStatusAndErrors ENDP
+
+; ---------------------------------------------------------------------
+; AppendStepLine
+; Purpose:  Write one "STEP <n> <line> <AX> <BX> <CX> <DX> <ZF>" line,
+;           with the register values AFTER the instruction ran.
+; Receives: stepCount, pc (the line just executed), regs, zeroFlag
+; Returns:  nothing
+; Changes:  outBuf, outPos
+; Register use inside: EBX = register index 0..3
+; ---------------------------------------------------------------------
+AppendStepLine PROC USES eax ebx esi
+    mov  esi, OFFSET txtStep       ; "STEP"
+    call AppendString
+    call AppendSpace
+    mov  eax, stepCount            ; step number
+    call AppendNumber
+    call AppendSpace
+    mov  eax, pc                   ; line number
+    call AppendNumber
+
+    mov  ebx, 0                    ; AX, BX, CX, DX
+RegLoop:
+    call AppendSpace
+    mov  eax, regs[ebx*4]          ; value of virtual register EBX
+    call AppendNumber
+    inc  ebx
+    cmp  ebx, 4
+    jb   RegLoop
+
+    call AppendSpace
+    mov  eax, zeroFlag             ; ZF
+    call AppendNumber
+    call AppendNewline
+    ret
+AppendStepLine ENDP
+
+; ---------------------------------------------------------------------
+; AppendEndLine
+; Purpose:  Write the final "END <TYPE> <value>" line.
+; Receives: endType, endValue
+; Returns:  nothing
+; Changes:  outBuf, outPos
+; ---------------------------------------------------------------------
+AppendEndLine PROC USES eax esi
+    mov  esi, OFFSET txtEnd        ; "END"
+    call AppendString
+    call AppendSpace
+
+    mov  esi, OFFSET endHalt       ; choose the word for this endType
+    cmp  endType, END_HALT
+    je   WriteType
+    mov  esi, OFFSET endNoHlt
+    cmp  endType, END_NOHLT
+    je   WriteType
+    mov  esi, OFFSET endErrStop
+    cmp  endType, END_ERRSTOP
+    je   WriteType
+    mov  esi, OFFSET endLoop       ; the only one left: END_LOOP
+WriteType:
+    call AppendString              ; "HALT" / "NOHLT" / "ERRSTOP" / "LOOP"
+    call AppendSpace
+    mov  eax, endValue
+    call AppendNumber
+    call AppendNewline
+    ret
+AppendEndLine ENDP
+
+; ---------------------------------------------------------------------
+; WriteResultFile
+; Purpose:  Create result.txt and write the whole outBuf into it with a
+;           single WriteToFile call.
+; Receives: resultFile, outBuf, outPos (= number of bytes to write)
+; Returns:  nothing
+; Changes:  fileHandle; prints an error message (DEBUG only) on failure
+; ---------------------------------------------------------------------
+WriteResultFile PROC USES eax ecx edx
+    mov  edx, OFFSET resultFile    ; EDX = file name
+    call CreateOutputFile          ; EAX = handle (an old result.txt is replaced)
+    cmp  eax, INVALID_HANDLE_VALUE
+    jne  FileOpened
+
+    mov  eax, DEBUG                ; could not create the file
+    cmp  eax, 0
+    je   Done
+    mov  edx, OFFSET dbgNoWrite
+    call WriteString
+    call Crlf
+    jmp  Done
+
+FileOpened:
+    mov  fileHandle, eax
+    mov  edx, OFFSET outBuf        ; EDX = what to write
+    mov  ecx, outPos               ; ECX = how many bytes
+    call WriteToFile               ; (EAX = handle)
+    mov  eax, fileHandle
+    call CloseFile
+Done:
+    ret
+WriteResultFile ENDP
 
 END main
