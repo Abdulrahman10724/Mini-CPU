@@ -2,11 +2,13 @@
 // Flow of one run:  editor text -> api.run() -> Python writes program.txt, runs CPU.exe,
 // parses result.txt -> state.result -> every component re-renders from state.
 
-import { state, update, subscribe, totalSteps } from "./state.js";
+import { state, update, subscribe, totalSteps, errorOnLine } from "./state.js";
 import { api } from "./api.js";
 import { toast } from "./toast.js";
 import { initEditor, renderEditor, setCode, cancelLiveRun } from "./editor.js";
 import { buildDatapath, showState, renderDatapathText } from "./datapath.js";
+import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
+import { errorInfo } from "./errors.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -39,16 +41,107 @@ async function runCode(code, mode, lineHint = null) {
   }
 }
 
-function applyResult(result, code, mode) {
-  update({ result, resultCode: code, cursor: result.steps.length, playing: false });
+function applyResult(result, code, mode, lineHint) {
+  stopPlaying();
+  const N = result.steps.length;
   $("analysisBtn").hidden = false;
+
+  if (mode === "run") {                     // Run: from step 0, animated to the end
+    update({ result, resultCode: code, cursor: 0 });
+    play();
+  } else if (mode === "step") {             // Step with no result yet: run, then step 1
+    update({ result, resultCode: code, cursor: 0 });
+    if (N > 0) goTo(1, { animate: true });
+    else announceEnd();
+  } else {                                  // live: jump to the last step at once
+    update({ result, resultCode: code, cursor: N });
+    // replay only the last execution of the line the user just finished, once
+    let j = 0;
+    result.steps.forEach((st, i) => { if (st.line === lineHint) j = i + 1; });
+    if (j > 0 && state.speed !== "instant") playStep(j, STEP_MS[state.speed], N);
+  }
+}
+
+// ------------------------------------------------------------------ playback
+// goTo moves the timeline. With animate = true it plays the transition k-1 -> k.
+function goTo(k, { animate = false } = {}) {
+  k = Math.max(0, Math.min(k, totalSteps()));
+  if (animate && k >= 1 && state.speed !== "instant") {
+    const done = playStep(k, STEP_MS[state.speed]);   // starts before update(), so the
+    update({ cursor: k });                             // datapath waits for the animation
+    return done;
+  }
+  cancelAnimation();
+  update({ cursor: k });
+  return Promise.resolve(true);
+}
+
+let playToken = 0;                         // a new token cancels an older play loop
+
+async function play() {
+  if (!state.result) return;
+  const N = totalSteps();
+  if (state.cursor >= N) goTo(0);
+  const token = ++playToken;
+  update({ playing: true });
+  if (state.speed === "instant") {
+    goTo(N);
+  } else {
+    while (token === playToken && state.cursor < N) {
+      const finished = await goTo(state.cursor + 1, { animate: true });
+      if (!finished) break;
+    }
+  }
+  if (token === playToken) {
+    update({ playing: false });
+    if (state.cursor === N) announceEnd();
+  }
+}
+
+function stopPlaying() {
+  playToken++;
+  if (state.playing) update({ playing: false });
+  if (isAnimating()) { cancelAnimation(); showState(state.cursor); }
+}
+
+function togglePlay() {
+  if (state.playing) stopPlaying();
+  else play();
+}
+
+async function stepForward() {
+  if (!state.result || state.code !== state.resultCode) { runCode(state.code, "step"); return; }
+  stopPlaying();
+  if (state.cursor >= totalSteps()) return;
+  await goTo(state.cursor + 1, { animate: true });
+  if (state.cursor === totalSteps()) announceEnd();
+}
+
+function stepBack() {
+  stopPlaying();
+  goTo(state.cursor - 1);
+}
+
+function resetTimeline() {
+  stopPlaying();
+  goTo(0);
+}
+
+// Toast when the program reaches its END line.
+function announceEnd() {
+  const { end, steps } = state.result;
+  if (end.type === "HALT") toast(`Halted after ${steps.length} ${steps.length === 1 ? "step" : "steps"}`, "green");
+  else if (end.type === "LOOP") toast(`Stopped: infinite loop (${end.value} steps)`, "amber");
+  else if (end.type === "ERRSTOP") {
+    const code = errorOnLine(end.value) || 9;
+    toast(end.value === 0 ? errorInfo(9).message : `Stopped at line ${end.value}: ${errorInfo(code).message}`, "red");
+  } else toast(`Ran past the last line after ${end.value} steps (no HLT)`);
 }
 
 // ------------------------------------------------------------------ datapath
 function renderDatapath(s, patch) {
-  if ("result" in patch || "cursor" in patch || "regFormat" in patch || "code" in patch) {
-    showState(s.cursor);
-  }
+  const changed = "result" in patch || "cursor" in patch || "regFormat" in patch || "code" in patch;
+  if (changed && !isAnimating()) showState(s.cursor);     // the animator draws while it runs
   renderDatapathText(s);
 }
 
@@ -148,6 +241,8 @@ function wireTopBar() {
   $("logoBtn").addEventListener("click", () => navigate("home"));
   $("analysisBtn").addEventListener("click", () => navigate("analysis"));
   $("runBtn").addEventListener("click", () => runCode(state.code, "run"));
+  $("stepBtn").addEventListener("click", stepForward);
+  $("resetBtn").addEventListener("click", resetTimeline);
 }
 
 // ------------------------------------------------------------------ boot
@@ -173,6 +268,6 @@ async function boot() {
 boot();
 
 // Small handle for debugging in the web inspector (and for the dev screenshot script).
-window.miniCpu = { state, update };
+window.miniCpu = { state, update, goTo, play };
 
 export { runCode, totalSteps };

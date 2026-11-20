@@ -331,6 +331,46 @@ export function setGate(mode) {          // "" | "pass" | "blocked"
   dp.gateCross.setAttribute("visibility", mode === "blocked" ? "visible" : "hidden");
 }
 
+// Highlight one phase in the strip above the SVG (null = all idle).
+const PHASES = ["fetch", "decode", "execute"];
+export function setPhase(name) {
+  const index = PHASES.indexOf(name);
+  document.querySelectorAll("#phaseStrip li").forEach((li, i) => {
+    li.classList.toggle("active", i === index);
+    li.classList.toggle("done", index >= 0 && i < index);
+  });
+}
+
+// Purple -> green outline flash on a register, plus a "+4" tag that floats up.
+export function flashRegister(i, delta) {
+  const r = dp.regs[i];
+  r.row.removeAttribute("data-flash");
+  void r.row.getBoundingClientRect();          // restart the CSS animation
+  r.row.setAttribute("data-flash", "");
+  if (!delta) return;
+  const tag = txt(r.row, 800, r.top - 8, (delta > 0 ? "+" : "−") + Math.abs(delta), "delta-tag",
+                  { "text-anchor": "end" });
+  setTimeout(() => tag.remove(), 900);
+}
+
+export function showOneChip(on) {
+  dp.oneChip.setAttribute("visibility", on ? "visible" : "hidden");
+}
+
+export function showDiscarded(on) {
+  dp.discard.setAttribute("visibility", on ? "visible" : "hidden");
+  if (on) dp.wires.writeback.dataset.on = "muted";
+  else delete dp.wires.writeback.dataset.on;
+}
+
+export function showHalted() {
+  dp.svg.classList.add("halted");
+  dp.stamp.setAttribute("visibility", "visible");
+  dp.stamp.classList.remove("stamp-in");
+  void dp.stamp.getBoundingClientRect();
+  dp.stamp.classList.add("stamp-in");
+}
+
 // ------------------------------------------------------------------ full state
 // Show the complete CPU state after step k. No animation.
 export function showState(k) {

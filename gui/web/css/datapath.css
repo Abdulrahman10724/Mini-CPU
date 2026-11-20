@@ -119,7 +119,9 @@
 .fmt-btn:focus-visible .fmt-box { stroke: var(--cyan); stroke-width: 2; }
 
 /* delta tag that floats up from a changed register */
-.delta-tag { font-size: 12px; font-weight: 600; fill: var(--green); }
+.delta-tag { font-size: 13px; font-weight: 700; fill: var(--green); animation: delta-up .9s ease-out forwards; }
+@keyframes delta-up { from { transform: translateY(6px); opacity: 0; } 25% { opacity: 1; }
+  to { transform: translateY(-10px); opacity: 0; } }
 
 /* ALU */
 .alu-box { stroke-linejoin: round; }
@@ -153,6 +155,8 @@
 /* halted: the board dims and a stamp appears */
 .dp-board { transition: opacity .6s; }
 #datapath.halted .dp-board { opacity: .4; }
+.halt-stamp.stamp-in { animation: stamp-in .35s cubic-bezier(.2, 1.4, .4, 1); transform-box: fill-box; transform-origin: center; }
+@keyframes stamp-in { from { opacity: 0; scale: 1.25; } }
 .halt-stamp rect { fill: rgba(10, 15, 28, .55); stroke: var(--green); stroke-width: 3; }
 .halt-stamp text { font-size: 60px; font-weight: 700; letter-spacing: .18em; fill: none;
   stroke: var(--green); stroke-width: 1.6; }
