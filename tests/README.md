@@ -15,9 +15,11 @@ Run on Windows after building CPU.exe:
 2. Empty / spaces-only lines produce no STEP; execution just moves to the next line.
    Jumping to an empty line is allowed (it is within 1..total lines).
 3. One error per line: the first one found, checked left to right:
-   opcode (1) -> missing operand (3) -> first operand (8 if it starts with a digit or `-`,
-   else 2) -> second operand (5 if it starts with a digit or `-` and is not a valid number,
+   opcode (1) -> missing operand (3) -> first operand (8 if it starts with a digit, `-` or `+`,
+   else 2) -> second operand (5 if it starts with a digit, `-` or `+` and is not a valid number,
    else 2) -> extra operand (4).
+   A valid number is an optional `-` followed by digits only, so `+5` is error 5 (or 8 as
+   operand 1).
    Jump operand: not a number -> 5, outside 1..total lines -> 6.
 4. More than 50 lines: a single `ERR 51 7`; only lines 1-50 are parsed. Running past line 50
    reaches line 51 -> `END ERRSTOP 51`. Jump range is 1..50.

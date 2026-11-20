@@ -31,9 +31,10 @@ No match gives 0, which means error 1.
 **LookupRegister.** The same search over `regNames` (3-byte slots). It returns 0..3 for
 AX..DX, or -1 if the word is not a register.
 
-**IsNumberStart.** Returns 1 if the first char is a digit or `-`. This is how we tell
+**IsNumberStart.** Returns 1 if the first char is a digit, `-` or `+`. This is how we tell
 `MOV 5, AX` (error 8, "first operand must be a register") apart from `MOV EX, 5`
-(error 2, "invalid register").
+(error 2, "invalid register"). `+5` "looks like" a number, but StrToInt rejects it, so
+`MOV AX, +5` gives error 5 (invalid number) and `MOV +5, AX` gives error 8.
 
 **StrToInt.** Reads an optional `-`, then digits only. For each digit:
 `value = value * 10 + digit`. Three checks catch overflow before it can wrap around:
@@ -45,7 +46,7 @@ AX..DX, or -1 if the word is not a register.
 or error 8 if the word looks like a number, otherwise error 2.
 
 **ParseSrcOperand.** Operand 2 of MOV/ADD/SUB/CMP. A register gives `EDX = 1` and
-EAX = register index. A word starting with a digit or `-` must pass StrToInt, giving
+EAX = register index. A word starting with a digit, `-` or `+` must pass StrToInt, giving
 `EDX = 2` and EAX = value, or error 5 if it fails. Anything else is error 2.
 
 **ParseJumpTarget.** The operand of JMP/JZ/JNZ. It must be a number (error 5 if not) and
@@ -87,3 +88,12 @@ fields. Irvine's `WriteInt` prints a `+` in front of positive numbers (`+5`), so
 3. Missing operand? There are 2 - 1 = 1 operands, and 1 < 2, so it's error 3. Jump to SetError.
 4. `lineErr = 3` and `instOp` stays 0. Debug prints `ERR=3`. The operands are never
    checked, because only the first error found on a line is reported.
+
+## Known limitation: 15-character tokens
+
+Tokenize keeps only the first 15 characters of each word (TOKEN_LEN - 1), so it can never
+write outside the `tokens` array. The rest of a long word is skipped. Almost always the cut
+word is still invalid, for example a 55-digit number still overflows. But a word with
+leading zeros can become valid after the cut: `JMP 0000000000000001X` (14 zeros) is cut to
+`000000000000001`, so it is accepted as `JMP 1`. We decided to accept this limitation. Real
+programs never have 16+ character operands, and the buffer safety matters more.
