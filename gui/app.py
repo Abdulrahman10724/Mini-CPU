@@ -55,7 +55,7 @@ def main():
     parser.add_argument("--debug", action="store_true", help="open the web inspector")
     args = parser.parse_args()
 
-    api = Api(choose_engine(args))
+    api = Api(choose_engine(args), find_engine=lambda: choose_engine(args))
     window = webview.create_window(
         "Mini CPU Simulator", url=os.path.join(GUI_DIR, "web", "index.html"),
         js_api=api, width=1440, height=900, min_size=(1280, 760),

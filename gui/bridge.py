@@ -36,14 +36,22 @@ OPEN_DIALOG, SAVE_DIALOG = 10, 30        # = webview.FileDialog.OPEN / .SAVE
 
 
 class Api:
-    def __init__(self, engine):
-        """engine = {"state": "ready"|"missing"|"mock", "path": str}"""
+    def __init__(self, engine, find_engine=None):
+        """engine = {"state": "ready"|"missing"|"mock", "path": str}
+        find_engine = function that searches for CPU.exe again (used by Retry)."""
         self._engine = engine
+        self._find_engine = find_engine
         self._window = None              # set by app.py; private so JS cannot see it
         os.makedirs(RUNTIME_DIR, exist_ok=True)
 
     # ------------------------------------------------------------------ engine
     def engine_status(self):
+        return dict(self._engine)
+
+    def recheck_engine(self):
+        """Search for CPU.exe again (after the user built it or edited config.json)."""
+        if self._find_engine is not None and self._engine["state"] != "mock":
+            self._engine = self._find_engine()
         return dict(self._engine)
 
     def _engine_command(self):

@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Mini CPU Simulator</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="vendor/codemirror/codemirror.css">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/layout.css">
+  <link rel="stylesheet" href="css/components.css">
+  <link rel="stylesheet" href="css/datapath.css">
+</head>
+<body>
+
+<!-- Icon set: 16px, 1.5px stroke. Use as <svg class="icon"><use href="#i-play"/></svg> -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.2v9.6L12.6 8z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 16 16"><path d="M5.5 3.5v9M10.5 3.5v9"/></symbol>
+    <symbol id="i-step" viewBox="0 0 16 16"><path d="M3.5 3.5v9L9.5 8zM12 3.5v9"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 16 16"><path d="M3.2 8a4.8 4.8 0 1 0 1.5-3.5M3.2 2.5v3h3"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 16 16"><path d="M2 4h4.2l1.5 1.6h6.3v6.9H2z"/></symbol>
+    <symbol id="i-save" viewBox="0 0 16 16"><path d="M2.5 2.5h8.3l2.7 2.7v8.3h-11zM5 2.5v3.3h5V2.5M5 13.5V9.5h6v4"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 16 16"><path d="M4.5 6.2 8 9.8l3.5-3.6"/></symbol>
+    <symbol id="i-help" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M6.4 6.4a1.7 1.7 0 1 1 2.4 1.5c-.5.3-.8.6-.8 1.2v.3M8 11.3v.1"/></symbol>
+    <symbol id="i-first" viewBox="0 0 16 16"><path d="M4 3.5v9M12.5 3.5v9L6 8z"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 16 16"><path d="M11.5 3.5v9L4.5 8z"/></symbol>
+    <symbol id="i-next" viewBox="0 0 16 16"><path d="M3.5 3.5v9L9.5 8zM12 3.5v9"/></symbol>
+    <symbol id="i-last" viewBox="0 0 16 16"><path d="M12 3.5v9M3.5 3.5v9L10 8z"/></symbol>
+    <symbol id="i-close" viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></symbol>
+  </defs>
+</svg>
+
+<div class="app" id="app">
+
+  <!-- ============================ TOP BAR ============================ -->
+  <header class="topbar">
+    <button class="logo" id="logoBtn" aria-label="Mini CPU home" data-tip="Home">
+      <svg class="logo-chip" viewBox="0 0 24 24" aria-hidden="true">
+        <rect x="5" y="5" width="14" height="14" rx="2.5"/>
+        <path d="M9 2v3M12 2v3M15 2v3M9 19v3M12 19v3M15 19v3M2 9h3M2 12h3M2 15h3M19 9h3M19 12h3M19 15h3"/>
+        <circle class="logo-core" cx="12" cy="12" r="2.4"/>
+      </svg>
+      <span class="logo-name">Mini CPU</span><span class="logo-sub">Simulator</span>
+    </button>
+
+    <div class="file-chip" id="fileChip" title="">
+      <span class="file-name" id="fileName">untitled.txt</span>
+      <span class="dirty-dot" id="dirtyDot" hidden aria-label="Unsaved changes"></span>
+    </div>
+
+    <div class="spacer"></div>
+
+    <div class="tb-group" role="group" aria-label="Run controls">
+      <button class="btn btn-primary" id="runBtn" data-tip="Run (Ctrl+Enter)">
+        <svg class="icon icon-fill"><use href="#i-play"/></svg>Run</button>
+      <button class="btn btn-outline" id="stepBtn" data-tip="Step forward (F10)">
+        <svg class="icon icon-fill"><use href="#i-step"/></svg>Step</button>
+      <button class="btn btn-ghost" id="resetBtn" data-tip="Back to step 0">
+        <svg class="icon"><use href="#i-reset"/></svg>Reset</button>
+    </div>
+
+    <div class="seg" id="speedSeg" role="radiogroup" aria-label="Animation speed">
+      <button role="radio" data-speed="0.25">0.25×</button>
+      <button role="radio" data-speed="0.5">0.5×</button>
+      <button role="radio" data-speed="1">1×</button>
+      <button role="radio" data-speed="2">2×</button>
+      <button role="radio" data-speed="instant">Instant</button>
+    </div>
+
+    <div class="menu-wrap">
+      <button class="btn btn-ghost" id="demosBtn" aria-haspopup="menu" aria-expanded="false">
+        Demos<svg class="icon"><use href="#i-chevron"/></svg></button>
+      <div class="menu" id="demosMenu" role="menu" hidden></div>
+    </div>
+
+    <div class="tb-group">
+      <button class="btn-icon" id="openBtn" aria-label="Open file" data-tip="Open (Ctrl+O)">
+        <svg class="icon"><use href="#i-folder"/></svg></button>
+      <button class="btn-icon" id="saveBtn" aria-label="Save file" data-tip="Save (Ctrl+S)">
+        <svg class="icon"><use href="#i-save"/></svg></button>
+    </div>
+
+    <button class="btn btn-ghost" id="analysisBtn" hidden>Analysis</button>
+
+    <button class="engine" id="engineBtn" aria-haspopup="dialog">
+      <span class="engine-dot"></span><span id="engineText">Checking engine…</span>
+    </button>
+
+    <button class="btn-icon" id="helpBtn" aria-label="Help" data-tip="Help (F1)">
+      <svg class="icon"><use href="#i-help"/></svg></button>
+  </header>
+
+  <!-- ============================ EDITOR ============================ -->
+  <section class="panel editor-panel" aria-label="Program editor">
+    <div class="panel-head">
+      <h2 class="panel-title">Program</h2>
+      <div class="head-right">
+        <span class="chip" id="parseChip" hidden></span>
+        <span class="line-count" id="lineCount">0 / 50</span>
+      </div>
+      <div class="run-progress" id="runProgress"></div>
+    </div>
+    <div class="editor-body" id="editorHost"></div>
+  </section>
+
+  <!-- ============================ DATAPATH ============================ -->
+  <section class="panel datapath-panel" aria-label="CPU datapath">
+    <div class="phase-row">
+      <ol class="phase-strip" id="phaseStrip" aria-label="Instruction phase">
+        <li data-phase="fetch">Fetch</li>
+        <li data-phase="decode">Decode</li>
+        <li data-phase="execute">Execute</li>
+      </ol>
+      <div class="current-instr" id="currentInstr"></div>
+    </div>
+    <div class="dp-stage" id="dpStage">
+      <svg id="datapath" viewBox="0 0 960 600" preserveAspectRatio="xMidYMid meet"
+           role="img" aria-labelledby="dpTitle">
+        <title id="dpTitle">CPU datapath: program counter, instruction memory, decoder,
+          register file, ALU and flags</title>
+      </svg>
+      <p class="dp-caption" id="dpCaption" hidden>Write an instruction and press Enter</p>
+      <div class="engine-card" id="engineCard" hidden></div>
+    </div>
+    <p class="sr-only" id="dpLive" aria-live="polite"></p>
+  </section>
+
+  <!-- ============================ HISTORY ============================ -->
+  <section class="panel history-panel" aria-label="Execution history">
+    <div class="panel-head">
+      <h2 class="panel-title">Execution</h2>
+      <span class="chip chip-muted" id="stepCountChip">0 steps</span>
+    </div>
+    <ol class="history-list" id="historyList"></ol>
+    <p class="empty-note" id="historyEmpty">No steps yet</p>
+  </section>
+
+  <!-- ============================ TIMELINE ============================ -->
+  <footer class="panel timeline" aria-label="Timeline">
+    <div class="tl-buttons" role="group" aria-label="Timeline controls">
+      <button class="btn-icon" id="firstBtn" aria-label="First step" data-tip="First step (Home)">
+        <svg class="icon icon-fill"><use href="#i-first"/></svg></button>
+      <button class="btn-icon" id="prevBtn" aria-label="Previous step" data-tip="Step back (Shift+F10)">
+        <svg class="icon icon-fill"><use href="#i-prev"/></svg></button>
+      <button class="btn-icon btn-play" id="playBtn" aria-label="Play" data-tip="Play / pause (Ctrl+Space)">
+        <svg class="icon icon-fill"><use href="#i-play"/></svg></button>
+      <button class="btn-icon" id="nextBtn" aria-label="Next step" data-tip="Step forward (F10)">
+        <svg class="icon icon-fill"><use href="#i-next"/></svg></button>
+      <button class="btn-icon" id="lastBtn" aria-label="Last step" data-tip="Last step (End)">
+        <svg class="icon icon-fill"><use href="#i-last"/></svg></button>
+    </div>
+    <div class="tl-track">
+      <div class="tl-ticks" id="tlTicks" aria-hidden="true"></div>
+      <input type="range" id="tlSlider" min="0" max="0" value="0" step="1" aria-label="Timeline position">
+    </div>
+    <div class="tl-info">
+      <span class="tl-pos" id="tlPos">Step 0 / 0</span>
+      <span class="end-badge" id="tlEnd" hidden></span>
+    </div>
+  </footer>
+
+  <!-- ============================ OVERLAYS ============================ -->
+  <aside class="help-drawer" id="helpDrawer" aria-label="Help" hidden></aside>
+  <div class="popover" id="enginePop" role="dialog" aria-label="CPU engine" hidden></div>
+  <div class="err-tip" id="errTip" role="tooltip" hidden></div>
+  <div class="toast-host" id="toastHost" aria-live="polite"></div>
+</div>
+
+<script src="vendor/codemirror/codemirror.js"></script>
+<script src="vendor/codemirror/placeholder.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>

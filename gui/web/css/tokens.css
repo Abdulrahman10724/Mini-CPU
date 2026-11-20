@@ -1,0 +1,71 @@
+/* tokens.css - every colour, font and size used by the GUI.
+   Shared by all pages (editor now; home and analysis later). Use only these. */
+
+@font-face { font-family: "Space Grotesk"; font-weight: 400; font-display: block;
+  src: url("../fonts/space-grotesk/space-grotesk-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 500; font-display: block;
+  src: url("../fonts/space-grotesk/space-grotesk-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 600; font-display: block;
+  src: url("../fonts/space-grotesk/space-grotesk-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-weight: 700; font-display: block;
+  src: url("../fonts/space-grotesk/space-grotesk-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: block;
+  src: url("../fonts/jetbrains-mono/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: block;
+  src: url("../fonts/jetbrains-mono/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 600; font-display: block;
+  src: url("../fonts/jetbrains-mono/jetbrains-mono-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 700; font-display: block;
+  src: url("../fonts/jetbrains-mono/jetbrains-mono-latin-700-normal.woff2") format("woff2"); }
+
+:root {
+  /* surfaces */
+  --bg:        #0A0F1C;   /* app background */
+  --grid-dot:  #1A2340;   /* dot grid on the background */
+  --panel:     #0F1628;   /* panels */
+  --panel-2:   #141D33;   /* raised elements inside panels */
+  --line:      #223052;   /* borders, idle wires */
+  --line-2:    #2E3F68;   /* hovered borders */
+
+  /* text */
+  --text:      #E6ECF8;
+  --muted:     #8592B0;
+  --faint:     #56627F;
+
+  /* accents: each one has a single meaning */
+  --cyan:      #22D3EE;   /* active data, primary action, fetch */
+  --orange:    #FB923C;   /* ALU */
+  --purple:    #A78BFA;   /* registers */
+  --amber:     #FBBF24;   /* program counter, jumps, control flow */
+  --green:     #4ADE80;   /* ZF = 1, OK, HALT */
+  --red:       #F87171;   /* errors, ERRSTOP */
+
+  /* 12% "washes" for backgrounds */
+  --cyan-wash:   rgba(34, 211, 238, 0.12);
+  --orange-wash: rgba(251, 146, 60, 0.12);
+  --purple-wash: rgba(167, 139, 250, 0.12);
+  --amber-wash:  rgba(251, 191, 36, 0.12);
+  --green-wash:  rgba(74, 222, 128, 0.12);
+  --red-wash:    rgba(248, 113, 113, 0.12);
+
+  /* type */
+  --font-ui:   "Space Grotesk", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --fs-ui: 13px;
+  --fs-title: 12px;
+  --fs-code: 14px;
+  --lh-code: 22px;
+
+  /* layout */
+  --gap: 12px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --topbar-h: 56px;
+  --timeline-h: 72px;
+  --history-w: 280px;
+
+  /* the only glow allowed: active wires, pulses, lit ZF LED */
+  --glow-cyan:  drop-shadow(0 0 6px var(--cyan));
+  --glow-amber: drop-shadow(0 0 6px var(--amber));
+  --glow-green: drop-shadow(0 0 6px var(--green));
+}
