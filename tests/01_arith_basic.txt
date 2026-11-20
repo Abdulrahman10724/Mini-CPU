@@ -1,0 +1,5 @@
+MOV AX, 10
+MOV BX, 5
+ADD AX, BX
+SUB AX, 2
+HLT
