@@ -25,7 +25,7 @@ export function choreograph(d) {
   const typedLength = fields.reduce((n, [, v]) => n + v.length, 0);
 
   // ---------------------------------------------------------------- FETCH
-  beats.push({ at: 0, run: () => { dp.setPhase("fetch"); dp.rollPC(d.line, "amber"); } });
+  beats.push({ at: 0, run: () => { dp.setPhase("fetch"); dp.rollPC(d.line, "amber"); dp.setNext("", ""); } });
   beats.push({ at: 0, len: 0.25, glow: "pc", colour: "amber" });
   beats.push({ at: 0.05, len: 0.17, pulse: "pc_imem", colour: "cyan", label: `L${d.line}` });
   beats.push({ at: 0.2, run: () => dp.setImem(d.line) });

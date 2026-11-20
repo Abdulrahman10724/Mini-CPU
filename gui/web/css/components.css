@@ -22,7 +22,15 @@
 /* ---------------------------------------------------------------- top bar */
 .topbar {
   display: flex; align-items: center; gap: 10px;
-  padding: 0 4px;
+  padding: 0 4px; white-space: nowrap; min-width: 0;
+}
+.topbar > * { flex: none; }
+.topbar > .file-chip { flex: 0 1 auto; min-width: 90px; }
+@media (max-width: 1400px) {
+  .topbar { gap: 6px; }
+  .logo-sub { display: none; }
+  .seg button { padding: 0 7px; }
+  .btn { padding: 0 12px; }
 }
 .spacer { flex: 1; }
 .tb-group { display: flex; align-items: center; gap: 6px; }
@@ -209,7 +217,7 @@ code, .mono { font-family: var(--font-mono); font-size: 12px; color: var(--text)
 .ghost .g-val  { color: var(--text); }
 .ghost .g-zf1  { color: var(--green); }
 .ghost .g-jump { color: var(--amber); }
-.ghost .g-fall { color: var(--faint); }
+.ghost .g-fall { color: var(--muted); }
 .ghost .g-halt { color: var(--green); }
 .ghost .g-err  { color: var(--red); }
 .ghost .g-count {
@@ -241,7 +249,7 @@ code, .mono { font-family: var(--font-mono); font-size: 12px; color: var(--text)
 .h-row.current { background: var(--cyan-wash); }
 .h-row.current::before { content: ""; position: absolute; left: 0; top: 4px; bottom: 4px;
   width: 3px; border-radius: 0 3px 3px 0; background: var(--cyan); }
-.h-n    { color: var(--faint); }
+.h-n    { color: var(--muted); }
 .h-line { color: var(--amber); }
 .h-ins  { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h-chg  { color: var(--muted); white-space: nowrap; }
@@ -320,7 +328,7 @@ code, .mono { font-family: var(--font-mono); font-size: 12px; color: var(--text)
 .help-table td:first-child { white-space: nowrap; }
 .help-syntax { font: 500 12px/1.45 var(--font-mono); color: var(--text); }
 .help-syntax .op { color: var(--cyan); }
-.help-zf { font: 500 11px/1.4 var(--font-mono); color: var(--faint); }
+.help-zf { font: 500 11px/1.4 var(--font-mono); color: var(--muted); }
 .insert-btn { height: 24px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--line-2);
   background: transparent; color: var(--muted); font: 600 11px/1 var(--font-ui); cursor: pointer; }
 .insert-btn:hover { color: var(--cyan); border-color: var(--cyan); }
