@@ -1,0 +1,5 @@
+MOV AX, 2
+JMP 4
+FOO
+HLT
+MOV AX, 1, 2

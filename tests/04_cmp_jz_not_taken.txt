@@ -1,0 +1,7 @@
+MOV AX, 4
+MOV CX, 5
+CMP AX, CX
+JZ 7
+MOV BX, 1
+HLT
+MOV BX, 2
