@@ -196,7 +196,7 @@ code, .mono { font-family: var(--font-mono); font-size: 12px; color: var(--text)
 .line-error { box-shadow: inset 2px 0 0 var(--red); }
 .cm-err-text { text-decoration: underline wavy var(--red); text-decoration-thickness: 1px;
   text-underline-offset: 4px; text-decoration-skip-ink: none; }
-.line-pc { background: var(--amber-wash); }
+.line-pc { background: rgba(251, 191, 36, .07); }   /* lighter amber wash: a whole line */
 
 /* inline results ("ghost text") in a column right of the code */
 .ghost {

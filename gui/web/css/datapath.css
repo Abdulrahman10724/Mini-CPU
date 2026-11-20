@@ -33,7 +33,7 @@
 #datapath { width: 100%; height: 100%; display: block; overflow: visible; }
 
 .dp-caption {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); margin: 0;
+  position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%); margin: 0;
   padding: 10px 16px; border-radius: var(--radius-sm); border: 1px dashed var(--line-2);
   background: var(--panel); color: var(--muted); font-size: 14px; pointer-events: none;
 }

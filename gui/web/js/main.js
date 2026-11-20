@@ -5,12 +5,14 @@
 import { state, update, subscribe, totalSteps, errorOnLine } from "./state.js";
 import { api } from "./api.js";
 import { toast } from "./toast.js";
-import { initEditor, renderEditor, setCode, cancelLiveRun } from "./editor.js";
+import { initEditor, renderEditor, setCode, cancelLiveRun, insertLine } from "./editor.js";
 import { buildDatapath, showState, renderDatapathText } from "./datapath.js";
 import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
 import { errorInfo } from "./errors.js";
 import { initHistory, renderHistory } from "./history.js";
 import { initTimeline, renderTimeline } from "./timeline.js";
+import { initHelp, renderHelp } from "./help.js";
+import { initEngineUi, renderEngine, closeEnginePopover } from "./engine.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -161,6 +163,8 @@ function renderTopBar(s, patch) {
     }
   }
   if ("engine" in patch) {
+    $("runBtn").disabled = s.engine.state === "missing";
+    $("stepBtn").disabled = s.engine.state === "missing";
     const btn = $("engineBtn");
     btn.dataset.state = s.engine.state;
     $("engineText").textContent = {
@@ -265,13 +269,43 @@ function onKeyDown(e) {
   else if (e.key === "End" && !typing) { stopPlaying(); goTo(totalSteps()); }
   else if (ctrl && e.key.toLowerCase() === "o") openFile();
   else if (ctrl && e.key.toLowerCase() === "s") saveFile();
+  else if (e.key === "F1") update({ helpOpen: !state.helpOpen });
   else if (e.key === "Escape") closeOverlays();
   else handled = false;
   if (handled) { e.preventDefault(); e.stopPropagation(); }
 }
 
 function closeOverlays() {
-  closeDemos();
+  if (!$("demosMenu").hidden) { closeDemos(); $("demosBtn").focus(); return; }
+  if (!$("enginePop").hidden) { closeEnginePopover(); $("engineBtn").focus(); return; }
+  if (state.helpOpen) update({ helpOpen: false });
+}
+
+// Arrow keys inside the speed control and the demos menu.
+function wireArrowKeys() {
+  $("speedSeg").addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const buttons = [...$("speedSeg").querySelectorAll("button")];
+    const i = buttons.findIndex((b) => b.dataset.speed === state.speed);
+    const next = buttons[(i + (e.key === "ArrowRight" ? 1 : buttons.length - 1)) % buttons.length];
+    update({ speed: next.dataset.speed });
+    next.focus();
+    e.preventDefault();
+  });
+  $("demosMenu").addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const items = [...$("demosMenu").querySelectorAll(".menu-item")];
+    const i = items.indexOf(document.activeElement);
+    items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+    e.preventDefault();
+  });
+}
+
+async function retryEngine() {
+  const engine = await api.recheckEngine();
+  update({ engine });
+  if (engine.state === "missing") toast("CPU.exe is still not found", "red");
+  else { toast("Engine ready", "green"); closeEnginePopover(); if (state.code) runCode(state.code, "live"); }
 }
 
 // ------------------------------------------------------------------ boot
@@ -292,6 +326,12 @@ async function boot() {
   });
   subscribe(renderTimeline);
   window.addEventListener("keydown", onKeyDown, true);   // capture: before CodeMirror
+  initHelp({ onClose: () => update({ helpOpen: false }), onInsert: insertLine });
+  subscribe(renderHelp);
+  initEngineUi({ onRetry: retryEngine });
+  subscribe(renderEngine);
+  wireArrowKeys();
+  $("helpBtn").addEventListener("click", () => update({ helpOpen: !state.helpOpen }));
 
   initEditor($("editorHost"), {
     onCodeChange: (code, { programmatic }) => update({ code, dirty: programmatic ? state.dirty : true }),
