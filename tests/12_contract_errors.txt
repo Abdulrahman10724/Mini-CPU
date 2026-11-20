@@ -1,0 +1,5 @@
+MOV AX, 5
+MOV BX, 3
+MOVV CX, 1
+JZ 99
+HLT
