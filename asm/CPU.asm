@@ -570,7 +570,8 @@ LookupRegister ENDP
 ; ---------------------------------------------------------------------
 ; IsNumberStart
 ; Purpose:  Decide if a word "looks like a number": its first char is
-;           '0'..'9' or '-'. Used to choose error 8 vs 2 and 5 vs 2.
+;           '0'..'9', '-' or '+'. Used to choose error 8 vs 2 and 5 vs 2.
+;           ("+5" looks like a number, but StrToInt rejects it -> error 5 / 8.)
 ; Receives: ESI = address of the word
 ; Returns:  EAX = 1 if it looks like a number, 0 if not
 ; Changes:  nothing else
@@ -578,6 +579,8 @@ LookupRegister ENDP
 IsNumberStart PROC
     mov  al, [esi]                 ; AL = first char of the word
     cmp  al, '-'
+    je   Yes
+    cmp  al, '+'                   ; "+5" looks like a number (but is not valid)
     je   Yes
     cmp  al, '0'
     jb   No
@@ -698,7 +701,7 @@ ParseSrcOperand PROC
     clc
     ret
 NotRegister:
-    call IsNumberStart             ; starts with digit or '-'?
+    call IsNumberStart             ; starts with digit, '-' or '+'?
     cmp  eax, 1
     jne  BadRegister               ; no -> it is a bad register name
     call StrToInt                  ; EAX = value, Carry = 1 if invalid
