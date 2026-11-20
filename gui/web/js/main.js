@@ -6,6 +6,7 @@ import { state, update, subscribe, totalSteps } from "./state.js";
 import { api } from "./api.js";
 import { toast } from "./toast.js";
 import { initEditor, renderEditor, setCode, cancelLiveRun } from "./editor.js";
+import { buildDatapath, showState, renderDatapathText } from "./datapath.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -41,6 +42,14 @@ async function runCode(code, mode, lineHint = null) {
 function applyResult(result, code, mode) {
   update({ result, resultCode: code, cursor: result.steps.length, playing: false });
   $("analysisBtn").hidden = false;
+}
+
+// ------------------------------------------------------------------ datapath
+function renderDatapath(s, patch) {
+  if ("result" in patch || "cursor" in patch || "regFormat" in patch || "code" in patch) {
+    showState(s.cursor);
+  }
+  renderDatapathText(s);
 }
 
 // ------------------------------------------------------------------ top bar
@@ -145,6 +154,8 @@ function wireTopBar() {
 async function boot() {
   subscribe(renderTopBar);
   subscribe(renderEditor);
+  buildDatapath($("datapath"), { onFormatChange: (f) => update({ regFormat: f }) });
+  subscribe(renderDatapath);
 
   initEditor($("editorHost"), {
     onCodeChange: (code, { programmatic }) => update({ code, dirty: programmatic ? state.dirty : true }),
@@ -160,5 +171,8 @@ async function boot() {
 }
 
 boot();
+
+// Small handle for debugging in the web inspector (and for the dev screenshot script).
+window.miniCpu = { state, update };
 
 export { runCode, totalSteps };
