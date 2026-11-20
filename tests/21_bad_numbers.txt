@@ -1,0 +1,9 @@
+MOV DX, 4
+MOV AX, 5A
+MOV AX, -
+MOV AX, --3
+MOV AX, ABC
+MOV 5, AX
+MOV -2, AX
+MOV AX, +5
+HLT

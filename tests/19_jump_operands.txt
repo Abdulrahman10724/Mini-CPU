@@ -1,0 +1,7 @@
+MOV AX, 1
+JMP 7
+JMP AX
+JZ -1
+JNZ 0
+JMP 99
+HLT

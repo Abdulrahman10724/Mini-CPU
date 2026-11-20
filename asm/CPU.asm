@@ -26,6 +26,40 @@ TOKEN_LEN  = 16       ; bytes per token: 15 chars + 0 terminator
 BUF_SIZE   = 4096     ; max bytes read from program.txt
 OUT_SIZE   = 40000    ; result.txt output buffer
 
+; Name table sizes (Phase 3)
+NUM_OPCODES = 10      ; entries in opNames
+OP_SLOT     = 4       ; bytes per opNames slot
+NUM_REGS    = 4       ; entries in regNames
+REG_SLOT    = 3       ; bytes per regNames slot
+
+; Opcode numbers (same order as opNames)
+OP_MOV = 1
+OP_ADD = 2
+OP_SUB = 3
+OP_CMP = 4
+OP_INC = 5
+OP_DEC = 6
+OP_JMP = 7
+OP_JZ  = 8
+OP_JNZ = 9
+OP_HLT = 10
+
+; instSrcType values
+SRC_NONE     = 0      ; no source operand (INC, DEC, HLT)
+SRC_REGISTER = 1      ; instSrc holds a register index
+SRC_NUMBER   = 2      ; instSrc holds a number (or a jump target line)
+
+; Error codes (CONTRACT.md)
+ERR_UNKNOWN_OP    = 1 ; Unknown instruction
+ERR_BAD_REGISTER  = 2 ; Invalid register
+ERR_MISSING_OP    = 3 ; Missing operand
+ERR_EXTRA_OP      = 4 ; Extra operand
+ERR_BAD_NUMBER    = 5 ; Invalid number
+ERR_JUMP_RANGE    = 6 ; Jump target out of range
+ERR_TOO_MANY      = 7 ; Too many lines (max 50)
+ERR_FIRST_NOT_REG = 8 ; First operand must be a register
+ERR_NO_FILE       = 9 ; program.txt not found
+
 .data
 
 ; ---------------------------------------------------------------------
@@ -71,6 +105,9 @@ opNames      BYTE "MOV",0, "ADD",0, "SUB",0, "CMP",0, "INC",0
              BYTE "DEC",0, "JMP",0, "JZ",0,0, "JNZ",0, "HLT",0
 ; Each register name sits in a fixed 3-byte slot: slot index = register index.
 regNames     BYTE "AX",0, "BX",0, "CX",0, "DX",0
+; Number of operands each opcode needs, index = opcode - 1
+;                  MOV ADD SUB CMP INC DEC JMP JZ JNZ HLT
+opOperandCount BYTE 2,  2,  2,  2,  1,  1,  1,  1, 1,  0
 
 ; ---------------------------------------------------------------------
 ; Virtual CPU state (Phase 4) - plain memory, NOT the real CPU registers
@@ -96,6 +133,14 @@ dbgLines     BYTE "LINES: ",0
 dbgTooMany   BYTE "TOO MANY LINES",0
 dbgOpen      BYTE ": [",0                  ; printed between line number and line text
 dbgClose     BYTE "]",0                    ; printed after the line text
+dbgParsed    BYTE "PARSED:",0
+dbgColon     BYTE ": ",0
+dbgEmpty     BYTE "EMPTY",0
+dbgErr       BYTE "ERR=",0
+dbgOp        BYTE "OP=",0
+dbgDst       BYTE " DST=",0
+dbgSrcType   BYTE " SRCTYPE=",0
+dbgSrc       BYTE " SRC=",0
 
 .code
 
@@ -110,11 +155,13 @@ main PROC
     call ReadProgramFile           ; load program.txt into fileBuf
 
     cmp  fileMissing, 1            ; could the file be read?
-    je   SkipSplit                 ; no -> nothing to split
+    je   SkipParse                 ; no -> nothing to split or parse
     call SplitLines                ; yes -> cut fileBuf into lines
-SkipSplit:
+    call ParseAllLines             ; check every line, fill instruction arrays
+SkipParse:
 
     call DebugPrintLines           ; show what we read (only if DEBUG = 1)
+    call DebugPrintParsed          ; show what the parser found (only if DEBUG = 1)
 
     exit                           ; Irvine32 macro for INVOKE ExitProcess, 0
 main ENDP
@@ -335,5 +382,581 @@ LineLoop:
 Done:
     ret
 DebugPrintLines ENDP
+
+; =====================================================================
+; PHASE 3 - PARSER
+; Convention used by the Parse... helpers:
+;   Carry flag = 0 -> success, result in EAX
+;   Carry flag = 1 -> failure, EAX = error code (CONTRACT.md)
+; =====================================================================
+
+; ---------------------------------------------------------------------
+; GetTokenAddress
+; Purpose:  Return the address of token K inside the tokens array.
+; Receives: EAX = token index K (0-based)
+; Returns:  ESI = OFFSET tokens + K * TOKEN_LEN
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+GetTokenAddress PROC USES eax edx
+    mov  edx, TOKEN_LEN
+    mul  edx                       ; EAX = K * TOKEN_LEN (MUL also changes EDX)
+    mov  esi, OFFSET tokens
+    add  esi, eax                  ; ESI = start of token K
+    ret
+GetTokenAddress ENDP
+
+; ---------------------------------------------------------------------
+; Tokenize
+; Purpose:  Split one line into words. Spaces and commas are separators;
+;           a run of separators counts as one. Only the first MAX_TOKENS
+;           words are stored (max 15 chars each), but ALL words are
+;           counted, so "too many operands" can still be detected.
+; Receives: ESI = address of the line (uppercase, 0-terminated)
+; Returns:  tokCount = total number of words on the line
+; Changes:  tokens (cleared to 0 first, then filled)
+; Register use inside: EBX = read pointer in the line,
+;                      EDI = write pointer in the current token,
+;                      ECX = chars stored in the current token,
+;                      EDX = 1 if this word is stored, 0 if only counted
+; ---------------------------------------------------------------------
+Tokenize PROC USES eax ebx ecx edx esi edi
+    mov  ebx, esi                  ; EBX = read pointer (ESI is needed for GetTokenAddress)
+
+    ; --- clear the whole tokens array, so every token ends with a 0 ---
+    mov  ecx, 0
+ClearLoop:
+    cmp  ecx, MAX_TOKENS*TOKEN_LEN
+    jae  ClearDone
+    mov  tokens[ecx], 0
+    inc  ecx
+    jmp  ClearLoop
+ClearDone:
+    mov  tokCount, 0
+
+SkipSeparators:                    ; skip spaces/commas before the next word
+    mov  al, [ebx]
+    cmp  al, 0                     ; end of line -> finished
+    je   Done
+    cmp  al, ' '
+    je   IsSeparator
+    cmp  al, ','
+    je   IsSeparator
+    jmp  StartWord                 ; any other char starts a word
+IsSeparator:
+    inc  ebx
+    jmp  SkipSeparators
+
+StartWord:
+    mov  eax, tokCount             ; EAX = index of this new word
+    inc  tokCount                  ; count every word, stored or not
+    mov  edx, 0                    ; assume "count only"
+    cmp  eax, MAX_TOKENS           ; is there still a free token slot?
+    jae  WordChars                 ; no -> count it but do not store it
+    mov  edx, 1                    ; yes -> store this word
+    call GetTokenAddress           ; ESI = address of token slot EAX
+    mov  edi, esi                  ; EDI = where the next char goes
+    mov  ecx, 0                    ; no chars stored yet
+
+WordChars:                         ; copy chars until a separator or end of line
+    mov  al, [ebx]
+    cmp  al, 0                     ; end of line -> finished
+    je   Done
+    cmp  al, ' '                   ; separator -> word finished
+    je   SkipSeparators
+    cmp  al, ','
+    je   SkipSeparators
+
+    cmp  edx, 0                    ; count-only word? do not store
+    je   NextWordChar
+    cmp  ecx, TOKEN_LEN-1          ; token full (15 chars)? skip the rest
+    jae  NextWordChar
+    mov  [edi], al                 ; store the char
+    inc  edi
+    inc  ecx                       ; (the 0 after it is already there from ClearLoop)
+NextWordChar:
+    inc  ebx
+    jmp  WordChars
+
+Done:
+    ret
+Tokenize ENDP
+
+; ---------------------------------------------------------------------
+; StrEquals
+; Purpose:  Compare two 0-terminated strings, character by character.
+;           (Own simple loop instead of Irvine's Str_compare, so we only
+;           need one return value in EAX instead of reading CPU flags.)
+; Receives: ESI = address of string 1, EDI = address of string 2
+; Returns:  EAX = 1 if the strings are equal, 0 if not
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+StrEquals PROC USES ebx esi edi
+CompareLoop:
+    mov  al, [esi]                 ; AL = char from string 1
+    mov  bl, [edi]                 ; BL = char from string 2
+    cmp  al, bl
+    jne  NotEqual                  ; different char -> not equal
+    cmp  al, 0                     ; both ended at the same time -> equal
+    je   Equal
+    inc  esi
+    inc  edi
+    jmp  CompareLoop
+Equal:
+    mov  eax, 1
+    jmp  Done
+NotEqual:
+    mov  eax, 0
+Done:
+    ret
+StrEquals ENDP
+
+; ---------------------------------------------------------------------
+; LookupOpcode
+; Purpose:  Find a word in the opNames table (4-byte slots).
+; Receives: ESI = address of the word
+; Returns:  EAX = opcode number 1..10, or 0 if the word is not an opcode
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+LookupOpcode PROC USES ecx edi
+    mov  ecx, 0                    ; ECX = slot index (0 = MOV)
+    mov  edi, OFFSET opNames       ; EDI = address of the current name
+SearchLoop:
+    cmp  ecx, NUM_OPCODES          ; checked all names?
+    jae  NotFound
+    call StrEquals                 ; compare word (ESI) with name (EDI)
+    cmp  eax, 1
+    je   Found
+    add  edi, OP_SLOT              ; next name is 4 bytes further
+    inc  ecx
+    jmp  SearchLoop
+Found:
+    mov  eax, ecx
+    inc  eax                       ; opcode number = slot index + 1
+    jmp  Done
+NotFound:
+    mov  eax, 0
+Done:
+    ret
+LookupOpcode ENDP
+
+; ---------------------------------------------------------------------
+; LookupRegister
+; Purpose:  Find a word in the regNames table (3-byte slots).
+; Receives: ESI = address of the word
+; Returns:  EAX = register index 0..3 (AX..DX), or -1 if not a register
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+LookupRegister PROC USES ecx edi
+    mov  ecx, 0                    ; ECX = slot index (0 = AX)
+    mov  edi, OFFSET regNames
+SearchLoop:
+    cmp  ecx, NUM_REGS             ; checked all names?
+    jae  NotFound
+    call StrEquals
+    cmp  eax, 1
+    je   Found
+    add  edi, REG_SLOT             ; next name is 3 bytes further
+    inc  ecx
+    jmp  SearchLoop
+Found:
+    mov  eax, ecx                  ; register index = slot index
+    jmp  Done
+NotFound:
+    mov  eax, -1
+Done:
+    ret
+LookupRegister ENDP
+
+; ---------------------------------------------------------------------
+; IsNumberStart
+; Purpose:  Decide if a word "looks like a number": its first char is
+;           '0'..'9' or '-'. Used to choose error 8 vs 2 and 5 vs 2.
+; Receives: ESI = address of the word
+; Returns:  EAX = 1 if it looks like a number, 0 if not
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+IsNumberStart PROC
+    mov  al, [esi]                 ; AL = first char of the word
+    cmp  al, '-'
+    je   Yes
+    cmp  al, '0'
+    jb   No
+    cmp  al, '9'
+    ja   No
+Yes:
+    mov  eax, 1
+    ret
+No:
+    mov  eax, 0
+    ret
+IsNumberStart ENDP
+
+; ---------------------------------------------------------------------
+; StrToInt
+; Purpose:  Convert a word to a signed 32-bit number.
+;           Valid: optional single '-', then one or more digits, nothing else.
+;           The value must be in -2147483648 .. 2147483647.
+; Receives: ESI = address of the word
+; Returns:  EAX = the value, Carry flag = 0 if valid
+;           EAX = 0,         Carry flag = 1 if invalid
+; Changes:  nothing else
+; Register use inside: EAX = value so far (always positive),
+;                      EBX = 1 if negative, ECX = largest allowed value,
+;                      EDI = current digit
+; ---------------------------------------------------------------------
+StrToInt PROC USES ebx ecx edx edi esi
+    mov  eax, 0                    ; value = 0
+    mov  ebx, 0                    ; assume positive
+    mov  ecx, 2147483647           ; largest positive value
+    cmp  BYTE PTR [esi], '-'       ; leading minus sign?
+    jne  CheckFirst
+    mov  ebx, 1                    ; negative
+    mov  ecx, 80000000h            ; = 2147483648: a negative number may go one further (-2147483648)
+    inc  esi                       ; skip the '-'
+CheckFirst:
+    cmp  BYTE PTR [esi], 0         ; nothing (left) after the sign? ("" or "-")
+    je   Invalid
+
+DigitLoop:
+    movzx edi, BYTE PTR [esi]      ; EDI = next char
+    cmp  edi, 0                    ; end of word -> all digits read
+    je   AllDigits
+    cmp  edi, '0'                  ; not a digit -> invalid ("5A", "--3")
+    jb   Invalid
+    cmp  edi, '9'
+    ja   Invalid
+    sub  edi, '0'                  ; char '7' -> number 7
+
+    mov  edx, 10
+    mul  edx                       ; EDX:EAX = value * 10
+    cmp  edx, 0                    ; result did not fit in 32 bits -> too big
+    jne  Invalid
+    add  eax, edi                  ; value = value * 10 + digit
+    jc   Invalid                   ; carry -> did not fit in 32 bits -> too big
+    cmp  eax, ecx                  ; bigger than allowed? (unsigned compare)
+    ja   Invalid
+
+    inc  esi                       ; next char
+    jmp  DigitLoop
+
+AllDigits:
+    cmp  ebx, 1                    ; was there a minus sign?
+    jne  Valid
+    neg  eax                       ; make the value negative
+Valid:
+    clc                            ; Carry = 0 -> valid
+    jmp  Done
+Invalid:
+    mov  eax, 0
+    stc                            ; Carry = 1 -> invalid
+Done:
+    ret                            ; (the POPs from USES do not change the Carry flag)
+StrToInt ENDP
+
+; ---------------------------------------------------------------------
+; ParseRegOperand
+; Purpose:  Check an operand that must be a register (operand 1 of
+;           MOV/ADD/SUB/CMP/INC/DEC).
+; Receives: ESI = address of the operand word
+; Returns:  Carry = 0: EAX = register index 0..3
+;           Carry = 1: EAX = error code (8 if it looks like a number, else 2)
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+ParseRegOperand PROC
+    call LookupRegister            ; EAX = 0..3 or -1
+    cmp  eax, -1
+    je   NotRegister
+    clc                            ; valid register
+    ret
+NotRegister:
+    call IsNumberStart             ; "5" or "-2" -> error 8, "EX" -> error 2
+    cmp  eax, 1
+    je   LooksLikeNumber
+    mov  eax, ERR_BAD_REGISTER
+    stc
+    ret
+LooksLikeNumber:
+    mov  eax, ERR_FIRST_NOT_REG
+    stc
+    ret
+ParseRegOperand ENDP
+
+; ---------------------------------------------------------------------
+; ParseSrcOperand
+; Purpose:  Check operand 2 of MOV/ADD/SUB/CMP: a register or a number.
+; Receives: ESI = address of the operand word
+; Returns:  Carry = 0: EDX = SRC_REGISTER, EAX = register index, or
+;                      EDX = SRC_NUMBER,   EAX = the number
+;           Carry = 1: EAX = error code (5 if it looks like a number, else 2)
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+ParseSrcOperand PROC
+    call LookupRegister            ; is it AX/BX/CX/DX?
+    cmp  eax, -1
+    je   NotRegister
+    mov  edx, SRC_REGISTER         ; EAX already holds the register index
+    clc
+    ret
+NotRegister:
+    call IsNumberStart             ; starts with digit or '-'?
+    cmp  eax, 1
+    jne  BadRegister               ; no -> it is a bad register name
+    call StrToInt                  ; EAX = value, Carry = 1 if invalid
+    jc   BadNumber
+    mov  edx, SRC_NUMBER
+    clc
+    ret
+BadNumber:
+    mov  eax, ERR_BAD_NUMBER
+    stc
+    ret
+BadRegister:
+    mov  eax, ERR_BAD_REGISTER
+    stc
+    ret
+ParseSrcOperand ENDP
+
+; ---------------------------------------------------------------------
+; ParseJumpTarget
+; Purpose:  Check the operand of JMP/JZ/JNZ: a number from 1 to lineCount.
+; Receives: ESI = address of the operand word, lineCount
+; Returns:  Carry = 0: EAX = target line number
+;           Carry = 1: EAX = error code (5 not a number, 6 out of range)
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+ParseJumpTarget PROC
+    call StrToInt                  ; EAX = value, Carry = 1 if not a number
+    jc   BadNumber
+    cmp  eax, 1                    ; below line 1? (signed compare, value may be negative)
+    jl   OutOfRange
+    cmp  eax, lineCount            ; after the last line?
+    jg   OutOfRange
+    clc                            ; valid target
+    ret
+BadNumber:
+    mov  eax, ERR_BAD_NUMBER
+    stc
+    ret
+OutOfRange:
+    mov  eax, ERR_JUMP_RANGE
+    stc
+    ret
+ParseJumpTarget ENDP
+
+; ---------------------------------------------------------------------
+; ParseLine
+; Purpose:  Parse one line. On success fill instOp/instDst/instSrcType/
+;           instSrc for that line; on failure store the FIRST error found
+;           in lineErr. Check order: opcode (1) -> missing operand (3) ->
+;           operand 1 (8/2, or 5/6 for jumps) -> operand 2 (5/2) -> extra (4).
+; Receives: EAX = line number (1-based), lineText
+; Returns:  nothing
+; Changes:  instOp, instDst, instSrcType, instSrc, lineErr (for this line),
+;           tokens, tokCount
+; Register use inside: EBX = array index (line - 1), ECX = opcode,
+;                      EDI = number of operands this opcode needs
+; ---------------------------------------------------------------------
+ParseLine PROC USES eax ebx ecx edx esi edi
+    mov  ebx, eax
+    dec  ebx                       ; EBX = index into the per-line arrays
+
+    ; start with a clean entry for this line
+    mov  instOp[ebx], 0
+    mov  instDst[ebx], 0
+    mov  instSrcType[ebx], SRC_NONE
+    mov  instSrc[ebx*4], 0         ; instSrc is SDWORD, so index * 4
+    mov  lineErr[ebx], 0
+
+    call GetLineAddress            ; ESI = address of this line (EAX = line number)
+    call Tokenize                  ; split it into words
+    cmp  tokCount, 0               ; no words -> empty line, not an error
+    je   Done
+
+    ; ---- 1. opcode ----
+    mov  eax, 0
+    call GetTokenAddress           ; ESI = word 0
+    call LookupOpcode              ; EAX = opcode 1..10 or 0
+    cmp  eax, 0
+    jne  OpcodeOK
+    mov  eax, ERR_UNKNOWN_OP
+    jmp  SetError
+OpcodeOK:
+    mov  ecx, eax                  ; ECX = opcode (kept for the whole PROC)
+    movzx edi, opOperandCount[ecx-1] ; EDI = operands needed (table index = opcode - 1)
+
+    ; ---- 2. missing operand ----
+    mov  eax, tokCount
+    dec  eax                       ; EAX = operands given (words minus the opcode)
+    cmp  eax, edi
+    jae  CountOK
+    mov  eax, ERR_MISSING_OP
+    jmp  SetError
+CountOK:
+
+    cmp  ecx, OP_HLT               ; HLT has no operands to check
+    je   CheckExtra
+    cmp  ecx, OP_JMP               ; JMP, JZ, JNZ (7..9) take a line number
+    jae  JumpOperand
+
+    ; ---- 3. operand 1 must be a register (MOV ADD SUB CMP INC DEC) ----
+    mov  eax, 1
+    call GetTokenAddress           ; ESI = word 1
+    call ParseRegOperand           ; EAX = register index or error code
+    jc   SetError
+    mov  instDst[ebx], al          ; store destination register
+    cmp  ecx, OP_INC               ; INC/DEC have only one operand
+    jae  CheckExtra
+
+    ; ---- 4. operand 2: register or number (MOV ADD SUB CMP) ----
+    mov  eax, 2
+    call GetTokenAddress           ; ESI = word 2
+    call ParseSrcOperand           ; EAX = value/register, EDX = source type
+    jc   SetError
+    mov  instSrcType[ebx], dl
+    mov  instSrc[ebx*4], eax
+    jmp  CheckExtra
+
+JumpOperand:                       ; ---- 3. operand 1 of a jump: target line ----
+    mov  eax, 1
+    call GetTokenAddress           ; ESI = word 1
+    call ParseJumpTarget           ; EAX = target line or error code
+    jc   SetError
+    mov  instSrcType[ebx], SRC_NUMBER
+    mov  instSrc[ebx*4], eax
+
+CheckExtra:                        ; ---- 5. extra operand ----
+    mov  eax, tokCount
+    dec  eax                       ; EAX = operands given
+    cmp  eax, edi                  ; more than needed?
+    jbe  StoreOpcode
+    mov  eax, ERR_EXTRA_OP
+    jmp  SetError
+
+StoreOpcode:                       ; everything is valid
+    mov  instOp[ebx], cl
+    jmp  Done
+
+SetError:                          ; EAX = error code
+    mov  lineErr[ebx], al
+    mov  instDst[ebx], 0           ; remove any fields stored before the error
+    mov  instSrcType[ebx], SRC_NONE
+    mov  instSrc[ebx*4], 0
+Done:
+    ret
+ParseLine ENDP
+
+; ---------------------------------------------------------------------
+; ParseAllLines
+; Purpose:  Parse lines 1..lineCount. If the file had more than 50 lines,
+;           mark line 51 with error 7.
+; Receives: lineCount, tooManyLines
+; Returns:  nothing
+; Changes:  instruction arrays and lineErr (through ParseLine)
+; ---------------------------------------------------------------------
+ParseAllLines PROC USES eax
+    mov  eax, 1                    ; EAX = line number
+LineLoop:
+    cmp  eax, lineCount
+    ja   LinesDone
+    call ParseLine                 ; (ParseLine keeps EAX unchanged)
+    inc  eax
+    jmp  LineLoop
+LinesDone:
+    cmp  tooManyLines, 1
+    jne  Done
+    mov  lineErr[MAX_LINES], ERR_TOO_MANY ; index 50 = line 51
+Done:
+    ret
+ParseAllLines ENDP
+
+; ---------------------------------------------------------------------
+; DebugPrintParsed
+; Purpose:  When DEBUG = 1, print the parser result for every line:
+;           "n: EMPTY", "n: ERR=e" or "n: OP=o DST=d SRCTYPE=t SRC=s",
+;           plus "51: ERR=7" if there were too many lines.
+; Receives: lineCount, tooManyLines, fileMissing, instruction arrays, lineErr
+; Returns:  nothing
+; Changes:  nothing (console output only)
+; ---------------------------------------------------------------------
+DebugPrintParsed PROC USES eax ebx edx
+    mov  eax, DEBUG
+    cmp  eax, 0                    ; debug output switched off?
+    je   Done
+    cmp  fileMissing, 1            ; nothing was parsed
+    je   Done
+
+    mov  edx, OFFSET dbgParsed     ; "PARSED:"
+    call WriteString
+    call Crlf
+
+    mov  ebx, 0                    ; EBX = array index (line number - 1)
+LineLoop:
+    cmp  ebx, lineCount
+    jae  PrintLine51
+
+    mov  eax, ebx
+    inc  eax                       ; line number = index + 1
+    call WriteDec
+    mov  edx, OFFSET dbgColon      ; ": "
+    call WriteString
+
+    cmp  lineErr[ebx], 0           ; error on this line?
+    je   NoError
+    mov  edx, OFFSET dbgErr        ; "ERR=<code>"
+    call WriteString
+    movzx eax, lineErr[ebx]
+    call WriteDec
+    jmp  EndOfLine
+
+NoError:
+    cmp  instOp[ebx], 0            ; no opcode and no error -> empty line
+    jne  PrintFields
+    mov  edx, OFFSET dbgEmpty
+    call WriteString
+    jmp  EndOfLine
+
+PrintFields:
+    mov  edx, OFFSET dbgOp         ; "OP=<opcode>"
+    call WriteString
+    movzx eax, instOp[ebx]
+    call WriteDec
+    mov  edx, OFFSET dbgDst        ; " DST=<register>"
+    call WriteString
+    movzx eax, instDst[ebx]
+    call WriteDec
+    mov  edx, OFFSET dbgSrcType    ; " SRCTYPE=<type>"
+    call WriteString
+    movzx eax, instSrcType[ebx]
+    call WriteDec
+    mov  edx, OFFSET dbgSrc        ; " SRC=<value>"
+    call WriteString
+    mov  eax, instSrc[ebx*4]
+    cmp  eax, 0                    ; WriteInt prints "+5" for positive numbers,
+    jl   PrintNegative             ; so use WriteDec for 0 and positive values
+    call WriteDec
+    jmp  EndOfLine
+PrintNegative:
+    call WriteInt                  ; prints "-5"
+
+EndOfLine:
+    call Crlf
+    inc  ebx
+    jmp  LineLoop
+
+PrintLine51:
+    cmp  tooManyLines, 1           ; "51: ERR=7" only if there were too many lines
+    jne  Done
+    mov  eax, MAX_LINES+1
+    call WriteDec
+    mov  edx, OFFSET dbgColon
+    call WriteString
+    mov  edx, OFFSET dbgErr
+    call WriteString
+    movzx eax, lineErr[MAX_LINES]
+    call WriteDec
+    call Crlf
+Done:
+    ret
+DebugPrintParsed ENDP
 
 END main
