@@ -60,6 +60,12 @@ ERR_TOO_MANY      = 7 ; Too many lines (max 50)
 ERR_FIRST_NOT_REG = 8 ; First operand must be a register
 ERR_NO_FILE       = 9 ; program.txt not found
 
+; How execution ended (endType values, Phase 4)
+END_HALT    = 1       ; HLT executed               -> END HALT <steps>
+END_NOHLT   = 2       ; ran past the last line     -> END NOHLT <steps>
+END_ERRSTOP = 3       ; reached a line with error  -> END ERRSTOP <line>
+END_LOOP    = 4       ; 500-step guard reached     -> END LOOP <steps>
+
 .data
 
 ; ---------------------------------------------------------------------
@@ -116,6 +122,14 @@ regs         SDWORD 4 DUP(0)               ; virtual AX, BX, CX, DX
 zeroFlag     DWORD 0                       ; virtual ZF (0 or 1)
 pc           DWORD 1                       ; virtual program counter = current line number (1-based)
 stepCount    DWORD 0                       ; instructions executed so far
+endType      BYTE 0                        ; how execution ended: END_HALT/NOHLT/ERRSTOP/LOOP
+endValue     DWORD 0                       ; number after END: steps, or the line for ERRSTOP
+
+; Words used in the END line, one string per endType
+endHalt      BYTE "HALT",0
+endNoHlt     BYTE "NOHLT",0
+endErrStop   BYTE "ERRSTOP",0
+endLoop      BYTE "LOOP",0
 
 ; ---------------------------------------------------------------------
 ; Output (Phase 5)
@@ -141,6 +155,13 @@ dbgOp        BYTE "OP=",0
 dbgDst       BYTE " DST=",0
 dbgSrcType   BYTE " SRCTYPE=",0
 dbgSrc       BYTE " SRC=",0
+dbgStep      BYTE "STEP ",0
+dbgLine      BYTE " LINE ",0
+dbgAX        BYTE ": AX=",0
+dbgBX        BYTE " BX=",0
+dbgCX        BYTE " CX=",0
+dbgDX        BYTE " DX=",0
+dbgZF        BYTE " ZF=",0
 
 .code
 
@@ -162,6 +183,11 @@ SkipParse:
 
     call DebugPrintLines           ; show what we read (only if DEBUG = 1)
     call DebugPrintParsed          ; show what the parser found (only if DEBUG = 1)
+
+    cmp  fileMissing, 1            ; no program -> nothing to run
+    je   SkipExecute
+    call ExecuteProgram            ; run the program (prints each step if DEBUG = 1)
+SkipExecute:
 
     exit                           ; Irvine32 macro for INVOKE ExitProcess, 0
 main ENDP
@@ -961,5 +987,301 @@ PrintLine51:
 Done:
     ret
 DebugPrintParsed ENDP
+
+; =====================================================================
+; PHASE 4 - EXECUTION ENGINE
+; The virtual CPU lives in memory: regs (AX..DX), zeroFlag, pc, stepCount.
+; Real CPU registers are only used as temporary helpers.
+; =====================================================================
+
+; ---------------------------------------------------------------------
+; GetSourceValue
+; Purpose:  Get the value of the source operand of one instruction:
+;           the value inside a virtual register, or the number itself.
+; Receives: EBX = instruction index (line - 1), instSrcType, instSrc, regs
+; Returns:  EAX = source value
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+GetSourceValue PROC USES ecx
+    mov  eax, instSrc[ebx*4]       ; EAX = stored number, or register index
+    cmp  instSrcType[ebx], SRC_REGISTER
+    jne  Done                      ; a number -> EAX already holds the value
+    mov  ecx, eax                  ; ECX = register index 0..3
+    mov  eax, regs[ecx*4]          ; EAX = value inside that virtual register
+Done:
+    ret
+GetSourceValue ENDP
+
+; ---------------------------------------------------------------------
+; SetZeroFlag
+; Purpose:  Set the virtual Zero Flag from a result: 1 if it is 0, else 0.
+; Receives: EAX = result
+; Returns:  nothing
+; Changes:  zeroFlag
+; ---------------------------------------------------------------------
+SetZeroFlag PROC
+    cmp  eax, 0
+    je   IsZero
+    mov  zeroFlag, 0
+    ret
+IsZero:
+    mov  zeroFlag, 1
+    ret
+SetZeroFlag ENDP
+
+; ---------------------------------------------------------------------
+; ExecuteInstruction
+; Purpose:  Execute ONE parsed instruction (decode + execute) and work
+;           out which line runs next.
+;           Arithmetic wraps around like a real CPU (2147483647 + 1 =
+;           -2147483648), because we use the real ADD/SUB/INC/DEC on
+;           32-bit values.
+; Receives: EBX = instruction index (line - 1), pc, instruction arrays
+; Returns:  EAX = next pc, ECX = 1 if HLT was executed, else 0
+; Changes:  regs, zeroFlag
+; Register use inside: ESI = destination register index, EDX = opcode
+; ---------------------------------------------------------------------
+ExecuteInstruction PROC USES edx esi
+    movzx esi, instDst[ebx]        ; ESI = destination register index 0..3
+    movzx edx, instOp[ebx]         ; EDX = opcode
+    mov  ecx, 0                    ; assume "not HLT"
+
+    ; ---- decode: jump to the block for this opcode ----
+    cmp  edx, OP_MOV
+    je   DoMov
+    cmp  edx, OP_ADD
+    je   DoAdd
+    cmp  edx, OP_SUB
+    je   DoSub
+    cmp  edx, OP_CMP
+    je   DoCmp
+    cmp  edx, OP_INC
+    je   DoInc
+    cmp  edx, OP_DEC
+    je   DoDec
+    cmp  edx, OP_JMP
+    je   DoJmp
+    cmp  edx, OP_JZ
+    je   DoJz
+    cmp  edx, OP_JNZ
+    je   DoJnz
+    cmp  edx, OP_HLT
+    je   DoHlt
+    jmp  NextLine                  ; (never happens: only valid opcodes get here)
+
+DoMov:                             ; MOV dst, src : dst = src, ZF unchanged
+    call GetSourceValue            ; EAX = src
+    mov  regs[esi*4], eax
+    jmp  NextLine
+
+DoAdd:                             ; ADD dst, src : dst = dst + src, set ZF
+    call GetSourceValue
+    add  regs[esi*4], eax
+    mov  eax, regs[esi*4]          ; EAX = result
+    call SetZeroFlag
+    jmp  NextLine
+
+DoSub:                             ; SUB dst, src : dst = dst - src, set ZF
+    call GetSourceValue
+    sub  regs[esi*4], eax
+    mov  eax, regs[esi*4]
+    call SetZeroFlag
+    jmp  NextLine
+
+DoCmp:                             ; CMP dst, src : ZF = (dst == src), no register changes
+    call GetSourceValue            ; EAX = src
+    mov  edx, regs[esi*4]          ; EDX = a COPY of dst
+    sub  edx, eax                  ; dst - src is 0 exactly when dst == src
+    mov  eax, edx                  ; (the virtual register itself is not changed)
+    call SetZeroFlag
+    jmp  NextLine
+
+DoInc:                             ; INC dst : dst = dst + 1, set ZF
+    inc  regs[esi*4]
+    mov  eax, regs[esi*4]
+    call SetZeroFlag
+    jmp  NextLine
+
+DoDec:                             ; DEC dst : dst = dst - 1, set ZF
+    dec  regs[esi*4]
+    mov  eax, regs[esi*4]
+    call SetZeroFlag
+    jmp  NextLine
+
+DoJmp:                             ; JMP n : always go to line n
+    mov  eax, instSrc[ebx*4]       ; EAX = target line
+    jmp  Done
+
+DoJz:                              ; JZ n : go to line n only if ZF = 1
+    cmp  zeroFlag, 1
+    jne  NextLine                  ; ZF = 0 -> not taken
+    mov  eax, instSrc[ebx*4]
+    jmp  Done
+
+DoJnz:                             ; JNZ n : go to line n only if ZF = 0
+    cmp  zeroFlag, 0
+    jne  NextLine                  ; ZF = 1 -> not taken
+    mov  eax, instSrc[ebx*4]
+    jmp  Done
+
+DoHlt:                             ; HLT : stop the program
+    mov  ecx, 1                    ; tell ExecuteProgram to stop
+    mov  eax, pc                   ; (next pc is not used after HLT)
+    jmp  Done
+
+NextLine:                          ; normal case: next pc = pc + 1
+    mov  eax, pc
+    inc  eax
+Done:
+    ret
+ExecuteInstruction ENDP
+
+; ---------------------------------------------------------------------
+; ExecuteProgram
+; Purpose:  The fetch-decode-execute loop. Starts at line 1 and runs
+;           until HLT, an error line, the end of the program, or the
+;           500-step guard. Empty lines are skipped (no step).
+; Receives: lineCount, tooManyLines, lineErr, instruction arrays
+; Returns:  endType, endValue
+; Changes:  regs, zeroFlag, pc, stepCount (and outBuf in Phase 5)
+; Register use inside: EBX = index of the current line (pc - 1),
+;                      EAX = next pc, ECX = 1 after HLT
+; ---------------------------------------------------------------------
+ExecuteProgram PROC USES eax ebx ecx edx
+    ; ---- reset the virtual CPU ----
+    ; (in MASM, regs[n] means "n BYTES after regs"; each register is 4 bytes)
+    mov  regs[0], 0                ; AX
+    mov  regs[4], 0                ; BX
+    mov  regs[8], 0                ; CX
+    mov  regs[12], 0               ; DX
+    mov  zeroFlag, 0
+    mov  pc, 1                     ; execution always starts at line 1
+    mov  stepCount, 0
+
+FetchLoop:
+    ; ---- ran past the last stored line? ----
+    mov  eax, pc
+    cmp  eax, lineCount
+    jbe  CheckError
+    cmp  tooManyLines, 1           ; the "next line" is line 51, which has error 7
+    jne  RanPastEnd
+    mov  endType, END_ERRSTOP
+    mov  endValue, MAX_LINES+1     ; END ERRSTOP 51
+    jmp  Done
+RanPastEnd:
+    mov  endType, END_NOHLT        ; END NOHLT <steps>
+    mov  edx, stepCount
+    mov  endValue, edx
+    jmp  Done
+
+CheckError:
+    ; ---- fetch: is the line at pc an error line? ----
+    mov  ebx, pc
+    dec  ebx                       ; EBX = index of this line
+    cmp  lineErr[ebx], 0
+    je   CheckEmpty
+    mov  endType, END_ERRSTOP      ; END ERRSTOP <line>
+    mov  edx, pc
+    mov  endValue, edx
+    jmp  Done
+
+CheckEmpty:
+    cmp  instOp[ebx], 0            ; empty line -> skip it, no step
+    jne  RunInstruction
+    inc  pc
+    jmp  FetchLoop
+
+RunInstruction:
+    ; ---- decode + execute ----
+    call ExecuteInstruction        ; EAX = next pc, ECX = 1 if HLT
+    inc  stepCount
+    call DebugPrintStep            ; pc still = the line just executed
+
+    cmp  ecx, 1                    ; was it HLT?
+    jne  CheckGuard
+    mov  endType, END_HALT         ; END HALT <steps>
+    mov  edx, stepCount
+    mov  endValue, edx
+    jmp  Done
+
+CheckGuard:
+    cmp  stepCount, MAX_STEPS      ; infinite loop guard
+    jb   NextInstruction
+    mov  endType, END_LOOP         ; END LOOP 500
+    mov  edx, stepCount
+    mov  endValue, edx
+    jmp  Done
+
+NextInstruction:
+    mov  pc, eax                   ; move to the next instruction
+    jmp  FetchLoop
+
+Done:
+    ret
+ExecuteProgram ENDP
+
+; ---------------------------------------------------------------------
+; DebugWriteSigned
+; Purpose:  Print a signed number on the console without a '+' sign
+;           (Irvine's WriteInt prints "+5", so use WriteDec for >= 0).
+; Receives: EAX = value
+; Returns:  nothing
+; Changes:  nothing (console output only)
+; ---------------------------------------------------------------------
+DebugWriteSigned PROC
+    cmp  eax, 0
+    jl   Negative
+    call WriteDec                  ; 0 and positive numbers: "5"
+    ret
+Negative:
+    call WriteInt                  ; negative numbers: "-5"
+    ret
+DebugWriteSigned ENDP
+
+; ---------------------------------------------------------------------
+; DebugPrintStep
+; Purpose:  When DEBUG = 1, print one executed step:
+;           STEP <n> LINE <l>: AX=<v> BX=<v> CX=<v> DX=<v> ZF=<z>
+; Receives: stepCount, pc (the line just executed), regs, zeroFlag
+; Returns:  nothing
+; Changes:  nothing (console output only)
+; ---------------------------------------------------------------------
+DebugPrintStep PROC USES eax edx
+    mov  eax, DEBUG
+    cmp  eax, 0                    ; debug output switched off?
+    je   Done
+
+    mov  edx, OFFSET dbgStep       ; "STEP <n>"
+    call WriteString
+    mov  eax, stepCount
+    call WriteDec
+    mov  edx, OFFSET dbgLine       ; " LINE <l>"
+    call WriteString
+    mov  eax, pc
+    call WriteDec
+    mov  edx, OFFSET dbgAX         ; ": AX=<v>"
+    call WriteString
+    mov  eax, regs[0]              ; regs[0]=AX, [4]=BX, [8]=CX, [12]=DX (byte offsets)
+    call DebugWriteSigned
+    mov  edx, OFFSET dbgBX         ; " BX=<v>"
+    call WriteString
+    mov  eax, regs[4]
+    call DebugWriteSigned
+    mov  edx, OFFSET dbgCX         ; " CX=<v>"
+    call WriteString
+    mov  eax, regs[8]
+    call DebugWriteSigned
+    mov  edx, OFFSET dbgDX         ; " DX=<v>"
+    call WriteString
+    mov  eax, regs[12]
+    call DebugWriteSigned
+    mov  edx, OFFSET dbgZF         ; " ZF=<z>"
+    call WriteString
+    mov  eax, zeroFlag
+    call WriteDec
+    call Crlf
+Done:
+    ret
+DebugPrintStep ENDP
 
 END main
