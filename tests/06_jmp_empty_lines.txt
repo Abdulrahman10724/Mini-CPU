@@ -1,0 +1,8 @@
+MOV AX, 1
+JMP 4
+MOV AX, 99
+
+MOV BX, 2
+JMP 8
+MOV CX, 3
+HLT
