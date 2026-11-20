@@ -9,6 +9,8 @@ import { initEditor, renderEditor, setCode, cancelLiveRun } from "./editor.js";
 import { buildDatapath, showState, renderDatapathText } from "./datapath.js";
 import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
 import { errorInfo } from "./errors.js";
+import { initHistory, renderHistory } from "./history.js";
+import { initTimeline, renderTimeline } from "./timeline.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -245,12 +247,51 @@ function wireTopBar() {
   $("resetBtn").addEventListener("click", resetTimeline);
 }
 
+// ------------------------------------------------------------------ keyboard shortcuts
+function inEditor(e) {
+  return Boolean(e.target.closest && e.target.closest(".CodeMirror"));
+}
+
+function onKeyDown(e) {
+  const ctrl = e.ctrlKey || e.metaKey;
+  const typing = inEditor(e) || ["INPUT", "TEXTAREA"].includes(e.target.tagName);
+  let handled = true;
+  if (ctrl && e.key === "Enter") runCode(state.code, "run");
+  else if (e.key === "F10" && e.shiftKey) stepBack();
+  else if (e.key === "F10") stepForward();
+  else if (ctrl && e.code === "Space") togglePlay();
+  else if (e.code === "Space" && !typing && !e.target.closest("button, [role=button], .h-row")) togglePlay();
+  else if (e.key === "Home" && !typing) { stopPlaying(); goTo(0); }
+  else if (e.key === "End" && !typing) { stopPlaying(); goTo(totalSteps()); }
+  else if (ctrl && e.key.toLowerCase() === "o") openFile();
+  else if (ctrl && e.key.toLowerCase() === "s") saveFile();
+  else if (e.key === "Escape") closeOverlays();
+  else handled = false;
+  if (handled) { e.preventDefault(); e.stopPropagation(); }
+}
+
+function closeOverlays() {
+  closeDemos();
+}
+
 // ------------------------------------------------------------------ boot
 async function boot() {
   subscribe(renderTopBar);
   subscribe(renderEditor);
   buildDatapath($("datapath"), { onFormatChange: (f) => update({ regFormat: f }) });
   subscribe(renderDatapath);
+  initHistory({ onSelect: (k) => { stopPlaying(); goTo(k); } });
+  subscribe(renderHistory);
+  initTimeline({
+    onSeek: (k) => { stopPlaying(); goTo(k); },
+    onFirst: () => { stopPlaying(); goTo(0); },
+    onPrev: stepBack,
+    onTogglePlay: togglePlay,
+    onNext: stepForward,
+    onLast: () => { stopPlaying(); goTo(totalSteps()); },
+  });
+  subscribe(renderTimeline);
+  window.addEventListener("keydown", onKeyDown, true);   // capture: before CodeMirror
 
   initEditor($("editorHost"), {
     onCodeChange: (code, { programmatic }) => update({ code, dirty: programmatic ? state.dirty : true }),
