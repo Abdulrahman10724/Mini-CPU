@@ -81,7 +81,7 @@
 .pc-next[data-colour="green"] { fill: var(--green); }
 
 /* IMEM */
-.imem-num { font-size: 13px; fill: var(--faint); }
+.imem-num { font-size: 13px; fill: var(--muted); }
 .imem-text { font-size: 13px; fill: var(--muted); }
 .imem-text[data-active="true"] { fill: var(--text); }
 .imem-hi { fill: transparent; }
@@ -89,7 +89,7 @@
 .imem-hi[data-tone="red"]  { fill: var(--red-wash); stroke: rgba(248, 113, 113, .45); }
 
 /* DECODER */
-.dec-key { font-size: 13px; fill: var(--faint); }
+.dec-key { font-size: 13px; fill: var(--muted); }
 .dec-val { font-size: 18px; font-weight: 500; fill: var(--text); }
 .dec-question { font-size: 72px; font-weight: 700; fill: var(--red); }
 .dec-error { font-size: 11.5px; fill: var(--red); }
@@ -100,7 +100,7 @@
 .seg-dim { fill: var(--faint); opacity: .8; }   /* leading zeros */
 .seg-on  { fill: var(--purple); }
 .reg-name { font-size: 15px; font-weight: 600; fill: var(--purple); }
-.reg-sub { font-size: 10.5px; fill: var(--faint); }
+.reg-sub { font-size: 10.5px; fill: var(--muted); }
 .reg-bin { font-size: 11px; fill: var(--purple); letter-spacing: .02em; }
 .reg-flash { fill: transparent; stroke: transparent; stroke-width: 1.5; }
 .reg-row[data-flash] .reg-flash { animation: reg-flash .7s ease-out forwards; }
@@ -140,7 +140,7 @@
 .led.on { fill: var(--green); filter: var(--glow-green); }
 .led-shine { fill: rgba(230, 236, 248, .08); pointer-events: none; }
 .led-label { font-size: 15px; font-weight: 600; fill: var(--text); }
-.led-caption { font-size: 11px; fill: var(--faint); }
+.led-caption { font-size: 11px; fill: var(--muted); }
 
 /* condition gate on the jump wire */
 .gate-box { fill: var(--panel-2); stroke: var(--line-2); stroke-width: 1.5; }
@@ -154,11 +154,13 @@
 
 /* halted: the board dims and a stamp appears */
 .dp-board { transition: opacity .6s; }
-#datapath.halted .dp-board { opacity: .4; }
+#datapath.halted .wires,
+#datapath.halted .block:not([data-block="regfile"]) { opacity: .4; }
+.wires, .block { transition: opacity .6s; }
 .halt-stamp.stamp-in { animation: stamp-in .35s cubic-bezier(.2, 1.4, .4, 1); transform-box: fill-box; transform-origin: center; }
 @keyframes stamp-in { from { opacity: 0; scale: 1.25; } }
 .halt-stamp rect { fill: rgba(10, 15, 28, .55); stroke: var(--green); stroke-width: 3; }
-.halt-stamp text { font-size: 60px; font-weight: 700; letter-spacing: .18em; fill: none;
+.halt-stamp text { font-size: 54px; font-weight: 700; letter-spacing: .18em; fill: none;
   stroke: var(--green); stroke-width: 1.6; }
 
 /* engine missing card */

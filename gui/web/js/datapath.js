@@ -216,9 +216,10 @@ function buildGate(layer) {
 }
 
 function buildStamp(svg) {
-  dp.stamp = el("g", { class: "halt-stamp", transform: "rotate(-12 420 410)", visibility: "hidden" }, svg);
-  el("rect", { x: 250, y: 360, width: 340, height: 100, rx: 12 }, dp.stamp);
-  txt(dp.stamp, 420, 432, "HALTED", "", { "text-anchor": "middle" });
+  // sits in the open gap between the two rows, so the register file stays readable
+  dp.stamp = el("g", { class: "halt-stamp", transform: "rotate(-8 380 312)", visibility: "hidden" }, svg);
+  el("rect", { x: 220, y: 270, width: 320, height: 84, rx: 12 }, dp.stamp);
+  txt(dp.stamp, 380, 333, "HALTED", "", { "text-anchor": "middle" });
 }
 
 // ------------------------------------------------------------------ setters (also used by the animator)
