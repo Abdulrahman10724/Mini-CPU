@@ -2,7 +2,7 @@
 
 .page-cover { overflow-y: auto; }
 .cover-grid {
-  height: 100%; min-height: 690px;          /* fits 1440x900; scrolls a little below that */
+  height: 100%; min-height: 640px;          /* fits 1280x800 and up; scrolls below that */
   display: grid; grid-template-columns: 45% minmax(0, 1fr); column-gap: 48px;
   padding: 22px 0 14px;
 }
@@ -101,3 +101,14 @@
 /* click the body: zoom into the die */
 #chip.zooming { transition: transform .4s ease-in, opacity .4s ease-in; transform: scale(2.4); opacity: 0;
   transform-origin: 50% 47%; }
+
+/* short windows (e.g. 1280x800): tighten the left column so the whole sheet fits */
+@media (max-height: 860px) {
+  .cover-grid { padding-top: 14px; }
+  .cover-title { font-size: 60px; }
+  .cover-sub { margin: 6px 0 10px; font-size: 18px; }
+  .cover-sec { margin-top: 12px; }
+  .features li { padding: 1px 0 1px 18px; font-size: 14px; }
+  .order-table td { padding-top: 6px; padding-bottom: 6px; }
+  .drawing-block td { padding-top: 2px; padding-bottom: 2px; }
+}

@@ -49,7 +49,11 @@ function show(page) {
   for (const el of document.querySelectorAll(".page")) {
     const on = el.dataset.page === page;
     el.hidden = !on;
-    el.classList.toggle("page-in", on && previous !== null);  // slide up + fade in (CSS)
+    el.classList.remove("page-in");
+    if (on && previous !== null) {
+      void el.offsetWidth;                  // reflow, so the animation starts again every visit
+      el.classList.add("page-in");          // slide up + fade in (CSS)
+    }
   }
   document.getElementById("app").dataset.page = page;
   for (const a of document.querySelectorAll("#sectionIndex a")) {

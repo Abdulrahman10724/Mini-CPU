@@ -72,7 +72,7 @@ function build(s, res) {
             <span><svg width="22" height="12"><rect width="22" height="12" fill="url(#hatchLight)"/></svg>data</span>
             <span><svg width="22" height="12"><rect width="22" height="12" fill="url(#hatchDense)"/></svg>arithmetic</span>
             <span><svg width="22" height="12"><rect width="22" height="12" fill="url(#hatchCross)"/></svg>compare</span>
-            <span><svg width="22" height="12"><rect width="22" height="12" fill="#1B1A17"/></svg>control</span>
+            <span><svg width="22" height="12"><rect width="22" height="12" style="fill: var(--ink)"/></svg>control</span>
           </div>
           <figcaption class="caption">Fig. 4 — Instruction mix: how many steps ran each instruction.</figcaption>
         </figure>

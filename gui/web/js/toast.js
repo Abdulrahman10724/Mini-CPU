@@ -27,6 +27,13 @@ export function toast(message, tone = "", { sticky = false } = {}) {
   } else {
     timer = setTimeout(() => el.remove(), 3000);
   }
+  el.dataset.sticky = sticky ? "1" : "";
   host.append(el);
   current = el;
+}
+
+// Turning to another sheet removes a short-lived toast (it belongs to the old page).
+// Sticky toasts stay until the user closes them.
+export function clearToast() {
+  if (current && !current.dataset.sticky) { clearTimeout(timer); current.remove(); current = null; }
 }
