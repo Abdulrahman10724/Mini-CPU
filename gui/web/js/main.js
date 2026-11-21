@@ -10,7 +10,7 @@ import { buildDatapath, showState, renderDatapathText } from "./datapath.js";
 import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
 import { errorInfo } from "./errors.js";
 import { initHistory, renderHistory } from "./history.js";
-import { initTimeline, renderTimeline } from "./timeline.js";
+import { initWaveform, renderWaveform } from "./waveform.js";
 import { initHelp, renderHelp } from "./help.js";
 import { initEngineUi, renderEngine, closeEnginePopover } from "./engine.js";
 
@@ -323,15 +323,16 @@ async function boot() {
   subscribe(renderDatapath);
   initHistory({ onSelect: (k) => { stopPlaying(); goTo(k); } });
   subscribe(renderHistory);
-  initTimeline({
-    onSeek: (k) => { stopPlaying(); goTo(k); },
+  initWaveform({
+    onSeek: (k) => { if (k !== state.cursor) { stopPlaying(); goTo(k); } },
     onFirst: () => { stopPlaying(); goTo(0); },
     onPrev: stepBack,
     onTogglePlay: togglePlay,
     onNext: stepForward,
     onLast: () => { stopPlaying(); goTo(totalSteps()); },
+    onHover: () => {},
   });
-  subscribe(renderTimeline);
+  subscribe(renderWaveform);
   window.addEventListener("keydown", onKeyDown, true);   // capture: before CodeMirror
   initHelp({ onClose: () => update({ helpOpen: false }), onInsert: insertLine });
   subscribe(renderHelp);
