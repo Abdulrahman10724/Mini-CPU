@@ -13,7 +13,7 @@
 // result.txt. This file only decides how to SHOW it.
 // Phases: FETCH 0-25 %, DECODE 25-45 %, EXECUTE 45-100 %.
 
-import { REG_NAMES } from "./state.js";
+import { REG_NAMES, JUMP_COND } from "./state.js";
 import * as dp from "./datapath.js";
 
 const ALU_OPS = ["MOV", "ADD", "SUB", "CMP", "INC", "DEC"];
@@ -79,8 +79,11 @@ export function choreograph(d) {
       beats.push({ at: 0.9, len: 0.1, glow: "regfile" });
     }
     if (d.op !== "MOV") {
-      beats.push({ at: 0.72, len: 0.14, pulse: "alu_flags", label: `ZF ${d.after.zf}` });
-      beats.push({ at: 0.86, run: () => dp.setZF(d.after.zf) });
+      // the flags this instruction writes (INC/DEC keep CF, like real x86)
+      const written = d.op === "INC" || d.op === "DEC" ? ["ZF", "SF"] : ["ZF", "SF", "CF"];
+      const label = written.map((f) => `${f[0]}${d.after[f.toLowerCase()]}`).join(" ");
+      beats.push({ at: 0.72, len: 0.14, pulse: "alu_flags", label });
+      beats.push({ at: 0.86, run: () => dp.setFlags(d.after) });
       beats.push({ at: 0.86, len: 0.14, glow: "flags" });
     }
   } else if (d.op === "JMP") {
@@ -88,8 +91,9 @@ export function choreograph(d) {
     beats.push({ at: 0.55, len: 0.3, progress: (f) => dp.setGate(f < 1 ? "pass" : "") });
     beats.push({ at: 0.8, len: 0.2, glow: "pc" });
     beats.push({ at: 0.8, run: () => dp.setNext(`next → ${pad(d.next)}`, "spot") });
-  } else if (d.op === "JZ" || d.op === "JNZ") {
-    beats.push({ at: 0.45, len: 0.15, pulse: "cond", label: `ZF ${d.after.zf}` });
+  } else if (JUMP_COND[d.op]) {                     // JZ JNZ JS JNS JC JNC
+    const flag = JUMP_COND[d.op][0];
+    beats.push({ at: 0.45, len: 0.15, pulse: "cond", label: `${flag} ${d.after[flag.toLowerCase()]}` });
     beats.push({ at: 0.45, len: 0.15, glow: "flags" });
     if (d.taken) {
       beats.push({ at: 0.6, len: 0.3, progress: (f) => dp.setGate(f < 1 ? "pass" : "") });

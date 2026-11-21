@@ -1,7 +1,7 @@
 // waveform.js - Fig. 2: the signal trace, drawn like a datasheet timing diagram.
 //
 //   PC  AX BX CX DX : "bus" rows  -  a hexagon per value, crossing in an X where it changes
-//   ZF              : a single-bit square wave (high = 1)
+//   ZF SF CF        : single-bit square waves (high = 1)
 //   JMP             : a mark ↶ at every step where a jump was taken
 //
 // Column k = the CPU state after step k (column 0 = the start: everything 0).
@@ -15,7 +15,8 @@
 import { state, totalSteps, describeStep } from "./state.js";
 
 const $ = (id) => document.getElementById(id);
-const ROWS = ["PC", "AX", "BX", "CX", "DX", "ZF", "JMP"];
+const ROWS = ["PC", "AX", "BX", "CX", "DX", "ZF", "SF", "CF", "JMP"];
+const FLAGS = ["ZF", "SF", "CF"];
 const X0 = 8;                 // left margin inside the plot
 const END_W = 110;            // room after the last column for the END tag
 const RULER_H = 34;           // top band: the "t = N" flag, then the step numbers
@@ -100,12 +101,13 @@ function prepare(s) {
   if (!r) { data = null; return; }
   const steps = r.steps;
   const N = steps.length;
-  const vals = { PC: [null], AX: [0], BX: [0], CX: [0], DX: [0], ZF: [0] };
+  const vals = { PC: [null], AX: [0], BX: [0], CX: [0], DX: [0], ZF: [0], SF: [0], CF: [0] };
   const taken = [false];
   for (let k = 1; k <= N; k++) {
     const st = steps[k - 1];
     vals.PC.push(st.line); vals.AX.push(st.ax); vals.BX.push(st.bx);
-    vals.CX.push(st.cx); vals.DX.push(st.dx); vals.ZF.push(st.zf);
+    vals.CX.push(st.cx); vals.DX.push(st.dx);
+    vals.ZF.push(st.zf); vals.SF.push(st.sf); vals.CF.push(st.cf);
     taken.push(describeStep(k).taken);
   }
   // runs of equal values for the bus rows: [{ s, e, v }], e exclusive
@@ -127,12 +129,13 @@ function measure() {
   const W = plot.clientWidth;
   const H = plot.clientHeight;
   const jmpH = 16;
-  const busH = Math.max(16, Math.min(34, Math.floor((H - RULER_H - 6 - jmpH - 22) / 5.6)));
-  const zfH = Math.min(22, busH);
+  // 5 bus rows + 3 flag rows (each about 0.6 of a bus row) + the JMP row
+  const busH = Math.max(14, Math.min(34, Math.floor((H - RULER_H - 6 - jmpH - 26) / 6.8)));
+  const zfH = Math.max(11, Math.min(20, Math.round(busH * 0.6)));
   let y = RULER_H + 4;
   const rows = {};
   for (const r of ROWS) {
-    const h = r === "ZF" ? zfH : r === "JMP" ? jmpH : busH;
+    const h = FLAGS.includes(r) ? zfH : r === "JMP" ? jmpH : busH;
     rows[r] = { y, h };
     y += h + 2;
   }
@@ -238,14 +241,14 @@ function draw() {
     }
   }
 
-  // ZF: square wave
-  {
-    const { y, h } = rows.ZF;
+  // ZF, SF, CF: square waves
+  for (const flag of FLAGS) {
+    const { y, h } = rows[flag];
     const hi = y + 3, lo = y + h - 3;
     ctx.beginPath();
     ctx.lineWidth = 1.5;
     for (let k = first; k <= last; k++) {
-      const yy = data.vals.ZF[k] ? hi : lo;
+      const yy = data.vals[flag][k] ? hi : lo;
       if (k === first) ctx.moveTo(colX(k), yy);
       else ctx.lineTo(colX(k), yy);
       ctx.lineTo(colX(k + 1), yy);
@@ -409,7 +412,7 @@ function setHover(k, silent = false) {
   if (k === null) { tip.hidden = true; if (!silent) hooks.onHover(null); return; }
   const v = data.vals;
   const where = k === 0 ? "start" : `L${v.PC[k]} ${describeStep(k).text}`;
-  tip.textContent = `step ${k} · ${where} · AX ${v.AX[k]} BX ${v.BX[k]} CX ${v.CX[k]} DX ${v.DX[k]} ZF ${v.ZF[k]}`;
+  tip.textContent = `step ${k} · ${where} · AX ${v.AX[k]} BX ${v.BX[k]} CX ${v.CX[k]} DX ${v.DX[k]} · ZF ${v.ZF[k]} SF ${v.SF[k]} CF ${v.CF[k]}`;
   const plot = $("tracePlot");
   const trace = plot.closest(".trace").getBoundingClientRect();
   const x = plot.getBoundingClientRect().left - trace.left + colCentre(k) - plot.scrollLeft;

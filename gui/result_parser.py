@@ -10,7 +10,7 @@ Returned dict:
 {
   "status": "OK" | "ERR",
   "errors": [{"line": int, "code": int}],
-  "steps":  [{"n", "line", "ax", "bx", "cx", "dx", "zf"}],
+  "steps":  [{"n", "line", "ax", "bx", "cx", "dx", "zf", "sf", "cf"}],
   "end":    {"type": "HALT" | "NOHLT" | "ERRSTOP" | "LOOP", "value": int}
 }
 """
@@ -72,15 +72,16 @@ def parse_result(text):
             result["errors"].append(err)
 
         elif keyword == "STEP":
-            if len(fields) != 8:
-                raise ResultFormatError(f"line {line_no}: STEP needs 7 numbers")
+            if len(fields) != 10:
+                raise ResultFormatError(f"line {line_no}: STEP needs 9 numbers")
             section = 2
             nums = [_int(f, line_no, "STEP field") for f in fields[1:]]
-            step = dict(zip(("n", "line", "ax", "bx", "cx", "dx", "zf"), nums))
+            step = dict(zip(("n", "line", "ax", "bx", "cx", "dx", "zf", "sf", "cf"), nums))
             if step["n"] != len(result["steps"]) + 1:
                 raise ResultFormatError(f"line {line_no}: step numbers must count 1, 2, 3, ...")
-            if step["zf"] not in (0, 1):
-                raise ResultFormatError(f"line {line_no}: ZF must be 0 or 1")
+            for flag in ("zf", "sf", "cf"):
+                if step[flag] not in (0, 1):
+                    raise ResultFormatError(f"line {line_no}: {flag.upper()} must be 0 or 1")
             result["steps"].append(step)
 
         elif keyword == "END":

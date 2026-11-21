@@ -4,17 +4,38 @@
 
 import { ERRORS } from "./errors.js";
 
+// [op, example operands, effect, flags it writes]
 const INSTRUCTIONS = [
-  ["MOV", "AX, 5", "Copy a number or register into a register", "unchanged"],
-  ["ADD", "AX, BX", "Add the source to the register", "1 if result is 0"],
-  ["SUB", "AX, 2", "Subtract the source from the register", "1 if result is 0"],
-  ["CMP", "AX, 8", "Compare; registers do not change", "1 if equal"],
-  ["INC", "CX", "Add 1 to the register", "1 if result is 0"],
-  ["DEC", "CX", "Subtract 1 from the register", "1 if result is 0"],
-  ["JMP", "3", "Go to line 3", "unchanged"],
-  ["JZ", "7", "Go to line 7 if ZF is 1", "unchanged"],
-  ["JNZ", "L1", "Go to the line labelled L1: if ZF is 0", "unchanged"],
-  ["HLT", "", "Stop the program", "unchanged"],
+  ["MOV", "AX, 5", "Copy a number or register into a register", "—"],
+  ["ADD", "AX, BX", "Add the source to the register", "ZF SF CF"],
+  ["SUB", "AX, 2", "Subtract the source from the register", "ZF SF CF"],
+  ["CMP", "AX, 8", "Compare (like SUB); registers do not change", "ZF SF CF"],
+  ["INC", "CX", "Add 1 to the register", "ZF SF"],
+  ["DEC", "CX", "Subtract 1 from the register", "ZF SF"],
+  ["JMP", "3", "Go to line 3", "—"],
+  ["JZ", "7", "Go to line 7 if ZF is 1 (zero / equal)", "—"],
+  ["JNZ", "L1", "Go to the line labelled L1: if ZF is 0", "—"],
+  ["JS", "L1", "Go to L1 if SF is 1 (result negative)", "—"],
+  ["JNS", "L1", "Go to L1 if SF is 0 (zero or positive)", "—"],
+  ["JC", "L1", "Go to L1 if CF is 1 (carry / borrow)", "—"],
+  ["JNC", "L1", "Go to L1 if CF is 0", "—"],
+  ["HLT", "", "Stop the program", "—"],
+];
+
+// How each instruction sets the flags (real x86 rules). Help text only.
+const FLAGS = [
+  ["MOV", "unchanged", "unchanged", "unchanged"],
+  ["ADD", "result = 0", "bit 31 of result (1 = negative)", "unsigned carry out"],
+  ["SUB", "result = 0", "bit 31 of result", "borrow (unsigned dst < src)"],
+  ["CMP", "dst = src", "like SUB", "like SUB"],
+  ["INC / DEC", "result = 0", "bit 31 of result", "unchanged (as on x86)"],
+  ["jumps, HLT", "unchanged", "unchanged", "unchanged"],
+];
+const FLAG_EXAMPLES = [
+  ["MOV AX, 0 · SUB AX, 1", "AX = -1, SF = 1, CF = 1 (borrow)"],
+  ["MOV AX, -1 · ADD AX, 1", "AX = 0, ZF = 1, SF = 0, CF = 1 (carry)"],
+  ["MOV AX, 5 · CMP AX, 9", "SF = 1, CF = 1 (5 < 9)"],
+  ["SUB … (CF = 1) · INC AX", "CF stays 1"],
 ];
 
 // Labels: what they look like and what they do (help text only).
@@ -47,11 +68,13 @@ let onClose = () => {};
 export function initHelp(hooks) {
   onClose = hooks.onClose;
   const drawer = document.getElementById("helpDrawer");
-  const rows = INSTRUCTIONS.map(([op, args, what, zf], i) => `
-    <tr><td class="mono"><b>${op}</b> ${args}</td><td>${what}</td><td class="mono">${zf}</td>
+  const rows = INSTRUCTIONS.map(([op, args, what, flags], i) => `
+    <tr><td class="mono"><b>${op}</b> ${args}</td><td>${what}</td><td class="mono">${flags}</td>
         <td><button class="ctl insert" data-i="${i}" aria-label="Insert ${op} ${args}">INSERT</button></td></tr>`).join("");
   const errors = Object.entries(ERRORS).map(([code, e]) => `
     <tr><td class="mono code">E${code}</td><td><b>${e.message}</b></td><td>${e.hint}</td></tr>`).join("");
+  const flagRows = FLAGS.map(([op, z, sf, cf]) => `<tr><td class="mono"><b>${op}</b></td><td>${z}</td><td>${sf}</td><td>${cf}</td></tr>`).join("");
+  const exampleRows = FLAG_EXAMPLES.map(([code, res]) => `<tr><td class="mono">${code}</td><td class="mono">${res}</td></tr>`).join("");
   const labelRows = LABELS.map(([ex, what]) => `<tr><td class="mono">${ex}</td><td>${what}</td></tr>`).join("");
   const keys = SHORTCUTS.map(([k, what]) => `<tr><td class="mono">${k}</td><td>${what}</td></tr>`).join("");
 
@@ -60,8 +83,12 @@ export function initHelp(hooks) {
       <button class="ctl" id="helpClose" aria-label="Close help">CLOSE <svg class="icon"><use href="#i-close"/></svg></button></div>
     <div class="help-body">
       <h3 class="appendix">Appendix A — Instruction set</h3>
-      <table class="sheet-table"><thead><tr><th>Syntax</th><th>Effect</th><th>ZF</th><th></th></tr></thead>
+      <table class="sheet-table"><thead><tr><th>Syntax</th><th>Effect</th><th>Flags</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table>
+      <p class="tcaption">Flags — all start at 0</p>
+      <table class="sheet-table flag-rules"><thead><tr><th></th><th>ZF</th><th>SF</th><th>CF</th></tr></thead>
+        <tbody>${flagRows}</tbody></table>
+      <table class="sheet-table flag-examples"><tbody>${exampleRows}</tbody></table>
       <p class="tcaption">Labels</p>
       <table class="sheet-table"><tbody>${labelRows}</tbody></table>
       <h3 class="appendix">Appendix B — Error codes</h3>

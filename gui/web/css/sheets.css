@@ -60,6 +60,10 @@
 .sheet-table td.mono { font-family: var(--font-mono); color: var(--ink); white-space: nowrap; }
 .sheet-table td.code { color: var(--spot-text); font-weight: 600; }
 .sheet-table b { color: var(--ink); font-weight: 600; }
+/* help: the flag rules in four even columns; the flag examples wrap instead of clipping */
+.flag-rules { table-layout: fixed; }
+.flag-rules th:first-child { width: 22%; }
+.flag-examples td.mono { white-space: normal; width: 50%; }
 .insert { height: 22px; padding: 0 2px; font-size: 11px; color: var(--ink-2); }
 .insert:hover { color: var(--ink); }
 

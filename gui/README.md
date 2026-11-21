@@ -125,5 +125,6 @@ The window has three sheets, listed under the title (§1 §2 §3) and switched w
     python gui/dev/dev_server.py --port 8765        # serves gui/web + answers api calls (mock)
     node gui/dev/screenshots.js                     # writes docs/screens/v2/*.png (needs Playwright)
     node gui/dev/screenshots_v3.js                  # writes docs/screens/v3/*.png (Cover + Analysis)
+    node gui/dev/screenshots_v4.js                  # writes docs/screens/v4/*.png (SF and CF flags)
 
 `screenshots.js` also expects `python gui/dev/dev_server.py --port 8766 --missing`.

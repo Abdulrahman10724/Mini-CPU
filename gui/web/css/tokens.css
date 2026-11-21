@@ -49,7 +49,7 @@
   --page-pad: 16px;
   --header-h: 76px;
   --log-w: 300px;
-  --trace-h: 240px;       /* resizable 180..400 (waveform.js) */
+  --trace-h: 270px;       /* resizable 180..400 (waveform.js); 9 rows since SF/CF */
   --radius: 0;
   --radius-btn: 2px;
 

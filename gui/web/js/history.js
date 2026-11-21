@@ -4,6 +4,7 @@
 // "current" mark, so long programs stay smooth.
 
 import { describeStep, indexes, REG_NAMES } from "./state.js";
+import { compact } from "./charts.js";
 
 let rows = [];
 let currentRow = null;
@@ -53,11 +54,15 @@ const regTag = (i) => `<span class="reg" data-reg="${REG_NAMES[i]}">${REG_NAMES[
 function changeHtml(d) {
   if (d.op === "HLT") return "■ HALT";
   if (d.isJump) return d.taken ? `→ L${d.next}` : "↓";
-  if (d.op === "CMP") return d.zfChanged ? `ZF ${d.before.zf}→<b>${d.after.zf}</b>` : `ZF ${d.after.zf}`;
+  // flags that changed: "SF↑ CF↑" (↑ = became 1, ↓ = became 0)
+  const flags = d.flagsChanged.map((f) => `<span class="flag-chg">${f}${d.after[f.toLowerCase()] ? "↑" : "↓"}</span>`).join(" ");
+  if (d.op === "CMP") return flags || `ZF ${d.after.zf}`;
   const i = d.changed.length ? d.changed[0] : REG_NAMES.indexOf(d.a);
-  if (i < 0) return "";
-  if (!d.changed.length) return `${regTag(i)} ${d.after.regs[i]}`;
-  return `${regTag(i)} ${d.before.regs[i]}→<b>${d.after.regs[i]}</b>`;
+  if (i < 0) return flags;
+  // with flag changes next to it, big values are shortened (2147483647 -> 2.1G) to fit
+  const v = (x) => (flags ? compact(x) : x);
+  const reg = d.changed.length ? `${regTag(i)} ${v(d.before.regs[i])}→<b>${v(d.after.regs[i])}</b>` : `${regTag(i)} ${v(d.after.regs[i])}`;
+  return flags ? `${reg} ${flags}` : reg;
 }
 
 function build(s) {

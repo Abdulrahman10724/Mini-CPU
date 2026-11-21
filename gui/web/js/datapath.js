@@ -12,7 +12,7 @@
 // stateAt(k) (data from result.txt). The small setters are also used by animator.js.
 // Print style: idle = thin grey rules, active = heavy ink + hatching, data = red labels.
 
-import { state, stateAt, describeStep, totalSteps, lineText, errorOnLine, REG_NAMES } from "./state.js";
+import { state, stateAt, describeStep, totalSteps, lineText, errorOnLine, REG_NAMES, JUMP_COND } from "./state.js";
 import { errorInfo } from "./errors.js";
 import { penStrokes } from "./pen.js";
 
@@ -220,11 +220,18 @@ function buildBlocks(layer) {
   txt(dp.oneChip, 470, 435, "1", "", { "text-anchor": "middle" });
   dp.blocks.alu = alu;
 
-  // ---- U4 FLAGS: ZF as a printed circle (hollow ring = 0, solid disc = 1)
+  // ---- U4 FLAGS: ZF SF CF as printed circles in a row (hollow ring = 0, solid disc = 1)
   const flags = block(layer, "flags");
-  dp.zfDisc = el("circle", { cx: 110, cy: 492, r: 46, class: "zf-disc" }, flags);
-  dp.zfText = txt(flags, 110, 576, "ZF = 0", "zf-label", { "text-anchor": "middle" });
-  txt(flags, 110, 602, "(result = 0)", "zf-caption", { "text-anchor": "middle" });
+  const FLAG_INFO = [["ZF", "zero"], ["SF", "sign"], ["CF", "carry"]];
+  dp.flagDisc = {};
+  dp.flagText = {};
+  FLAG_INFO.forEach(([name, meaning], i) => {
+    const cx = 60 + i * 50;                   // 3 columns inside the 160 px block (x 30..190)
+    dp.flagDisc[name] = el("circle", { cx, cy: 500, r: 19, class: "zf-disc" }, flags);
+    txt(flags, cx, 554, name, "flag-name", { "text-anchor": "middle" });
+    dp.flagText[name] = txt(flags, cx, 576, "0", "flag-value", { "text-anchor": "middle" });
+    txt(flags, cx, 604, meaning, "zf-caption", { "text-anchor": "middle" });
+  });
 }
 
 function buildGate(layer) {
@@ -276,9 +283,13 @@ export function setRegister(i, now, prev = null, fresh = false) {
   }
 }
 
-export function setZF(z) {
-  dp.zfDisc.classList.toggle("on", z === 1);
-  dp.zfText.textContent = `ZF = ${z}`;
+// Show the three flags; f = { zf, sf, cf } (each 0 or 1), e.g. stateAt(k).
+export function setFlags(f) {
+  for (const name of ["ZF", "SF", "CF"]) {
+    const v = f[name.toLowerCase()];
+    dp.flagDisc[name].classList.toggle("on", v === 1);
+    dp.flagText[name].textContent = String(v);
+  }
 }
 
 // Roll the PC cells to a line number (null shows "--").
@@ -338,7 +349,7 @@ function markImemHover() {
 }
 
 const OP_SYMBOL = { MOV: "pass", ADD: "+", SUB: "−", CMP: "cmp", INC: "+1", DEC: "−1",
-  JMP: "jmp", JZ: "jz", JNZ: "jnz", HLT: "halt" };
+  JMP: "jmp", JZ: "jz", JNZ: "jnz", JS: "js", JNS: "jns", JC: "jc", JNC: "jnc", HLT: "halt" };
 
 // Decoder fields for a line (display only).
 export function decodedFields(op, a, b) {
@@ -348,8 +359,8 @@ export function decodedFields(op, a, b) {
       return [["op", OP_SYMBOL[op]], ["dst", a], ["src", src(b)]];
     case "INC": case "DEC": return [["op", OP_SYMBOL[op]], ["dst", a], ["src", "#1"]];
     case "JMP": return [["op", "jmp"], ["to", `L${a}`], ["if", "always"]];
-    case "JZ": return [["op", "jz"], ["to", `L${a}`], ["if", "ZF = 1"]];
-    case "JNZ": return [["op", "jnz"], ["to", `L${a}`], ["if", "ZF = 0"]];
+    case "JZ": case "JNZ": case "JS": case "JNS": case "JC": case "JNC":
+      return [["op", OP_SYMBOL[op]], ["to", `L${a}`], ["if", `${JUMP_COND[op][0]} = ${JUMP_COND[op][1]}`]];
     case "HLT": return [["op", "halt"], ["", ""], ["", ""]];
     default: return [["op", ""], ["dst", ""], ["src", ""]];
   }
@@ -430,7 +441,7 @@ export function showState(k) {
     const changed = k > 0 && before.regs[i] !== v;
     setRegister(i, v, changed ? before.regs[i] : null, false);
   });
-  setZF(at.zf);
+  setFlags(at);
   setGate("");
   showDiscarded(false);
   showOneChip(false);
@@ -493,7 +504,7 @@ export function renderDatapathText(s) {
     cur.textContent = `L${d.line} · ${d.text}`;
     const changed = d.changed.map((i) => `${REG_NAMES[i]} is now ${d.after.regs[i]}`).join(", ");
     live.textContent = `Step ${k}, line ${d.line}, ${d.text}.` + (changed ? ` ${changed}.` : "") +
-      (d.zfChanged ? ` ZF is now ${d.after.zf}.` : "");
+      d.flagsChanged.map((f) => ` ${f} is now ${d.after[f.toLowerCase()]}.`).join("");
   } else {
     cur.textContent = "";
     live.textContent = r ? "Ready. Step 0." : "";

@@ -15,9 +15,10 @@ look-up; result.txt only has line numbers).
 import re
 
 REGS = ["AX", "BX", "CX", "DX"]
-JUMPS = ("JMP", "JZ", "JNZ")
+JUMPS = ("JMP", "JZ", "JNZ", "JS", "JNS", "JC", "JNC")
 CATEGORY = {"MOV": "data", "ADD": "arith", "SUB": "arith", "INC": "arith", "DEC": "arith",
-            "CMP": "compare", "JMP": "control", "JZ": "control", "JNZ": "control", "HLT": "control"}
+            "CMP": "compare", "JMP": "control", "JZ": "control", "JNZ": "control", "HLT": "control",
+            "JS": "control", "JNS": "control", "JC": "control", "JNC": "control"}
 
 
 LABEL_AT_START = re.compile(r"\s*([^\s,:]*):")
@@ -55,6 +56,8 @@ def compute(result, code):
     # register values per column: column 0 = start (all 0), column k = after step k
     values = {r: [0] + [s[r.lower()] for s in steps] for r in REGS}
     zf = [0] + [s["zf"] for s in steps]
+    sf = [0] + [s["sf"] for s in steps]
+    cf = [0] + [s["cf"] for s in steps]
 
     def line_text(no):
         return lines[no - 1].strip() if 1 <= no <= len(lines) else ""
@@ -118,10 +121,14 @@ def compute(result, code):
         "jumps_not_taken": jumps_not_taken,
         "jump_kinds": sorted(jump_kinds),
         "zf_transitions": sum(1 for k in range(1, n + 1) if zf[k] != zf[k - 1]),
+        "sf_transitions": sum(1 for k in range(1, n + 1) if sf[k] != sf[k - 1]),
+        "cf_transitions": sum(1 for k in range(1, n + 1) if cf[k] != cf[k - 1]),
         "errors": result["errors"],
         "ranges": {r: {"min": min(values[r]), "max": max(values[r]), "final": values[r][-1]} for r in REGS},
         "values": values,
         "zf": zf,
+        "sf": sf,
+        "cf": cf,
         "ops": ops,
         "changed": changed,
         "taken_steps": taken_steps,
