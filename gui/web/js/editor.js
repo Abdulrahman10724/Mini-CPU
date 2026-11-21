@@ -1,5 +1,6 @@
-// editor.js - the code editor (CodeMirror 5): syntax colours, gutters,
-// inline results next to each line, error marks, and live mode.
+// editor.js - the code editor (CodeMirror 5) drawn as a ruled school notebook:
+// ink-weight syntax, pencil notes (inline results), the teacher's red pen for errors,
+// and live mode.
 //
 // Live mode: Enter runs CPU.exe at once; any other edit runs it 700 ms after the
 // user stops typing. The actual run is done by main.js (hooks.liveRun).
@@ -8,18 +9,21 @@ import { state, stateAt, describeStep, errorOnLine, REG_NAMES } from "./state.js
 import { errorInfo } from "./errors.js";
 
 const OPCODES = ["MOV", "ADD", "SUB", "CMP", "INC", "DEC", "JMP", "JZ", "JNZ", "HLT"];
-const REGISTERS = ["AX", "BX", "CX", "DX"];
 const LIVE_DELAY_MS = 700;
+const SVG = "http://www.w3.org/2000/svg";
+const LINE_PAD = 12;        // left padding of a code line (editor.css)
 
 let cm = null;
 let hooks = null;
 let liveTimer = null;
-let decorations = [];       // things to remove before the next redraw
-let lastResult = undefined;
+let decorations = [];       // undo functions for everything drawn by the last redraw
+let lastResult;
 let lastCursor = -1;
+const drawnPens = new Set(); // red-pen marks already animated once (no re-animation on redraw)
 
 // ------------------------------------------------------------------ syntax mode
-// Colours only. Whether a line is valid is decided by CPU.exe, never here.
+// Ink weight only. Whether a line is valid is decided by CPU.exe, never here.
+// Registers also get "reg-AX" etc. so linked highlighting can find every AX.
 CodeMirror.defineMode("minicpu", () => ({
   startState: () => ({ word: 0 }),
   token(stream, st) {
@@ -29,7 +33,7 @@ CodeMirror.defineMode("minicpu", () => ({
     const w = stream.match(/^[^\s,]+/)[0].toUpperCase();
     st.word += 1;
     if (st.word === 1 && OPCODES.includes(w)) return "opcode";
-    if (st.word > 1 && REGISTERS.includes(w)) return "register";
+    if (st.word > 1 && REG_NAMES.includes(w)) return `register reg-${w}`;
     if (st.word > 1 && /^[-+]?\d+$/.test(w)) return "number";
     return null;
   },
@@ -41,9 +45,9 @@ export function initEditor(host, editorHooks) {
   cm = CodeMirror(host, {
     value: "",
     mode: "minicpu",
-    theme: "minicpu",
+    theme: "notebook",
     lineNumbers: true,
-    gutters: ["CodeMirror-linenumbers", "cpu-status-gutter"],
+    gutters: ["bp-gutter", "CodeMirror-linenumbers"],
     placeholder: "MOV AX, 5",
     indentUnit: 0,
     smartIndent: false,
@@ -55,16 +59,18 @@ export function initEditor(host, editorHooks) {
   cm.on("changes", (_, changes) => {
     const programmatic = changes.every((c) => c.origin === "setValue");
     hooks.onCodeChange(cm.getValue(), { programmatic });
-    updateGhostColumn();
     if (!programmatic) scheduleLiveRun();
   });
   cm.on("cursorActivity", markActiveLine);
 
   const wrapper = cm.getWrapperElement();
-  wrapper.addEventListener("mousemove", showErrorTip);
-  wrapper.addEventListener("mouseleave", hideErrorTip);
+  wrapper.addEventListener("mousemove", onHover);
+  wrapper.addEventListener("mouseleave", hideSlip);
   markActiveLine();
-  updateGhostColumn();
+  return cm;
+}
+
+export function getEditor() {
   return cm;
 }
 
@@ -73,11 +79,7 @@ export function setCode(code) {
   cm.clearHistory();
 }
 
-export function focusEditor() {
-  cm.focus();
-}
-
-// Insert example text on a new line below the cursor (used by the help drawer).
+// Insert example text on a new line below the cursor (used by the help sheet).
 export function insertLine(text) {
   const line = cm.getCursor().line;
   const current = cm.getLine(line);
@@ -106,11 +108,9 @@ export function cancelLiveRun() {
 // ------------------------------------------------------------------ render
 export function renderEditor(s, patch) {
   if (!cm) return;
-  if ("running" in patch) {
-    document.getElementById("runProgress").classList.toggle("active", s.running);
-  }
+  if ("running" in patch) document.getElementById("runProgress").classList.toggle("active", s.running);
   if ("code" in patch || "result" in patch) renderHeader(s);
-  if (s.result !== lastResult || s.cursor !== lastCursor || "code" in patch) {
+  if (s.result !== lastResult || s.cursor !== lastCursor || "code" in patch || "breakpoints" in patch) {
     lastResult = s.result;
     lastCursor = s.cursor;
     cm.operation(redrawDecorations);
@@ -141,9 +141,9 @@ function renderHeader(s) {
 }
 
 function clearDecorations() {
-  for (const d of decorations) d();
+  for (const undo of decorations) undo();
   decorations = [];
-  cm.clearGutter("cpu-status-gutter");
+  cm.clearGutter("bp-gutter");
 }
 
 function addLineClass(line, where, cls) {
@@ -151,28 +151,32 @@ function addLineClass(line, where, cls) {
   decorations.push(() => cm.removeLineClass(line, where, cls));
 }
 
-function gutterMark(line, cls) {
-  const el = document.createElement("span");
-  el.className = "st-mark " + cls;
-  cm.setGutterMarker(line, "cpu-status-gutter", el);
-}
-
-function ghost(line, html) {
-  const el = document.createElement("span");
-  el.className = "ghost";
-  el.innerHTML = html;
-  const mark = cm.setBookmark({ line, ch: cm.getLine(line).length }, { widget: el, insertLeft: true });
+function widgetAt(line, ch, el) {
+  const mark = cm.setBookmark({ line, ch }, { widget: el, insertLeft: true });
   decorations.push(() => mark.clear());
 }
 
-// Redraw status marks + inline results for timeline position state.cursor.
+function note(line, html, cls = "") {
+  const el = document.createElement("span");
+  el.className = "pencil " + cls;
+  el.innerHTML = html;
+  widgetAt(line, cm.getLine(line).length, el);
+}
+
+// Redraw breakpoints, the current line, pencil notes and red-pen marks for state.cursor.
 function redrawDecorations() {
   clearDecorations();
+  for (const n of state.breakpoints || []) {
+    if (n <= cm.lineCount()) {
+      const sq = document.createElement("span");
+      sq.className = "bp-mark";
+      sq.textContent = "■";
+      cm.setGutterMarker(n - 1, "bp-gutter", sq);
+    }
+  }
   const r = state.result;
   if (!r) return;
   const k = state.cursor;
-  const lineCount = cm.lineCount();
-  const resultLines = state.resultCode.split("\n");
 
   // last execution (step number) and execution count of each line, up to step k
   const lastExec = new Map();
@@ -184,57 +188,89 @@ function redrawDecorations() {
   }
   const pcLine = stateAt(k).line;
 
-  for (let n = 1; n <= lineCount; n++) {
+  for (let n = 1; n <= cm.lineCount(); n++) {
     const idx = n - 1;
     const code = errorOnLine(n);
-    const isEmpty = (resultLines[idx] || "").trim() === "" || n > resultLines.length;
-
     if (code) {
-      gutterMark(idx, "st-err");
       addLineClass(idx, "wrap", "line-error");
-      const m = cm.markText({ line: idx, ch: 0 }, { line: idx, ch: cm.getLine(idx).length },
-                            { className: "cm-err-text" });
-      decorations.push(() => m.clear());
-      ghost(idx, `<span class="g-err">${errorInfo(code).message}</span>`);
+      redPen(idx, `${n}:${cm.getLine(idx)}:${code}`);
+      note(idx, `✗ E${code} ${errorInfo(code).message}`, "pencil-err");
       continue;
     }
     if (n === pcLine) {
-      gutterMark(idx, "st-pc");
       addLineClass(idx, "gutter", "pc-line-gutter");
       addLineClass(idx, "background", "line-pc");
-    } else if (!isEmpty) {
-      gutterMark(idx, "st-ok");
     }
-    if (lastExec.has(n)) ghost(idx, ghostHtml(lastExec.get(n), execCount.get(n)));
+    if (lastExec.has(n)) note(idx, noteHtml(lastExec.get(n), execCount.get(n)));
   }
 }
 
-// Inline result of a line's last execution (step j), from result.txt data.
-function ghostHtml(j, count) {
+// The pencil note for a line's last execution (step j), from result.txt data.
+function noteHtml(j, count) {
   const d = describeStep(j);
   let html;
-  if (d.op === "HLT") {
-    html = `<span class="g-halt">■ halt</span>`;
-  } else if (d.op === "CMP") {
-    html = `<span class="g-reg">ZF</span> = <span class="${d.after.zf ? "g-zf1" : "g-val"}">${d.after.zf}</span>`;
-  } else if (d.isJump) {
-    html = d.taken ? `<span class="g-jump">→ L${d.next}</span>` : `<span class="g-fall">↓</span>`;
-  } else {
+  if (d.op === "HLT") html = "■ HALT";
+  else if (d.op === "CMP") html = `ZF ← ${d.after.zf}`;
+  else if (d.isJump) html = d.taken ? `→ L${d.next}` : (d.next ? `↓ L${d.next}` : "↓");
+  else {
     const reg = REG_NAMES.indexOf(d.a);
     const i = reg >= 0 ? reg : d.changed[0];
-    html = i === undefined ? "" :
-      `<span class="g-reg">${REG_NAMES[i]}</span> = <span class="g-val">${d.after.regs[i]}</span>`;
+    html = i === undefined ? "" : `${REG_NAMES[i]} ← ${d.after.regs[i]}`;
   }
-  if (count > 1) html += ` <span class="g-count">×${count}</span>`;
+  if (count > 1) html += `<span class="pencil-count">×${count}</span>`;
   return html;
 }
 
-// Inline results start in one column, 3 characters right of the longest line.
-function updateGhostColumn() {
-  let longest = 14;
-  cm.eachLine((h) => { longest = Math.max(longest, h.text.length); });
-  const px = 12 + (longest + 3) * cm.defaultCharWidth();
-  cm.getWrapperElement().style.setProperty("--ghost-left", `${Math.round(px)}px`);
+// ------------------------------------------------------------------ the red pen
+// A hand-drawn ellipse around the text of an error line: two slightly different
+// strokes (rotated ±2°), drawn with stroke-dashoffset the first time it appears.
+function redPen(idx, key) {
+  const text = cm.getLine(idx);
+  const start = text.search(/\S/);
+  if (start < 0) return;
+  const end = text.trimEnd().length;
+  const cw = cm.defaultCharWidth();
+  const w = (end - start) * cw + 18;
+  const h = 19;                                      // fits inside one 24px ruled line
+  const svg = document.createElementNS(SVG, "svg");
+  svg.setAttribute("class", "red-pen" + (drawnPens.has(key) ? " drawn" : ""));
+  svg.setAttribute("width", w + 8);
+  svg.setAttribute("height", h + 6);
+  // centre the ellipse on the text: the path's centre is at w/2 + 4 inside the svg
+  svg.style.left = `${LINE_PAD + start * cw + (end - start) * cw / 2 - (w / 2 + 4)}px`;
+  svg.style.top = "-1px";                            // centre on the line: (24 - (h + 6)) / 2
+  [[-2, 0], [2, 1]].forEach(([deg, i]) => {
+    const p = document.createElementNS(SVG, "path");
+    p.setAttribute("d", penEllipse(w, h, i));
+    p.setAttribute("pathLength", "100");
+    p.setAttribute("transform", `rotate(${deg} ${w / 2 + 4} ${h / 2 + 3})`);
+    if (i === 1) p.style.animationDelay = "90ms";
+    svg.append(p);
+  });
+  drawnPens.add(key);
+  const holder = document.createElement("span");
+  holder.className = "pen-holder";
+  holder.append(svg);
+  widgetAt(idx, 0, holder);
+}
+
+// A wobbly ellipse through 14 points whose radius changes a little (seeded, so the
+// same line always gets the same drawing). It overshoots its start like a real pen.
+function penEllipse(w, h, seed) {
+  const cx = w / 2 + 4, cy = h / 2 + 3, rx = w / 2, ry = h / 2;
+  const pts = [];
+  const steps = 14;
+  for (let i = 0; i <= steps + 2; i++) {
+    const a = -Math.PI * 0.85 + (i / steps) * Math.PI * 2;
+    const wobble = 1 + 0.05 * Math.sin(i * 2.3 + seed * 1.7);
+    pts.push([cx + Math.cos(a) * rx * wobble, cy + Math.sin(a) * ry * wobble]);
+  }
+  let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
+    d += ` Q ${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)}`;
+  }
+  return d;
 }
 
 function markActiveLine() {
@@ -244,26 +280,34 @@ function markActiveLine() {
   markActiveLine.prev = line;
 }
 
-// ------------------------------------------------------------------ error tooltip
-function showErrorTip(e) {
-  const tip = document.getElementById("errTip");
+// ------------------------------------------------------------------ hover slip
+// Hovering an error line shows a paper slip with the code, message and hint.
+function lineUnderMouse(e) {
   const pos = cm.coordsChar({ left: e.clientX, top: e.clientY }, "window");
-  const n = pos.line + 1;
-  const code = errorOnLine(n);
-  const lineBox = cm.charCoords({ line: pos.line, ch: 0 }, "window");
-  const insideLine = e.clientY >= lineBox.top && e.clientY <= lineBox.bottom;
-  if (!code || !insideLine) { tip.hidden = true; return; }
+  const box = cm.charCoords({ line: pos.line, ch: 0 }, "window");
+  if (e.clientY < box.top || e.clientY > box.bottom) return null;
+  return { line: pos.line + 1, box };
+}
+
+function onHover(e) {
+  const hit = lineUnderMouse(e);
+  const code = hit ? errorOnLine(hit.line) : 0;
+  if (!code) { hideSlip(); return; }
   const info = errorInfo(code);
-  tip.innerHTML =
-    `<div class="err-tip-head"><span class="err-tip-code">E${code}</span>` +
-    `<span class="err-tip-msg">${info.message}</span></div>` +
-    `<p class="err-tip-hint">${info.hint}</p>`;
+  showSlip(e, hit.box,
+    `<div class="slip-head"><b class="slip-code">E${code}</b> ${info.message}</div>` +
+    `<div class="slip-hint">${info.hint}</div>`);
+}
+
+function showSlip(e, box, html) {
+  const tip = document.getElementById("errTip");
+  tip.innerHTML = html;
   const app = document.getElementById("app").getBoundingClientRect();
-  tip.style.left = `${Math.min(e.clientX - app.left + 12, app.width - 320)}px`;
-  tip.style.top = `${lineBox.bottom - app.top + 6}px`;
+  tip.style.left = `${Math.min(e.clientX - app.left + 12, app.width - 330)}px`;
+  tip.style.top = `${box.bottom - app.top + 6}px`;
   tip.hidden = false;
 }
 
-function hideErrorTip() {
+function hideSlip() {
   document.getElementById("errTip").hidden = true;
 }

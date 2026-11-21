@@ -19,6 +19,7 @@ export const state = {
   speed: "1",               // "0.25" | "0.5" | "1" | "2" | "instant"
   regFormat: "dec",         // "dec" | "hex" | "bin"
   helpOpen: false,
+  breakpoints: new Set(),   // line numbers; GUI only, CPU.exe never sees them
 };
 
 const listeners = [];
