@@ -29,4 +29,6 @@ export const api = {
   saveSession: (session) => call("save_session", session),
   loadSession: () => call("load_session"),
   runDemo: (id) => call("run_demo", id),
+  analysis: () => call("analysis"),
+  exportTrace: (name) => call("export_trace", name),
 };

@@ -8,11 +8,15 @@ The GUI never checks or runs programs itself. run() only:
 Every method returns a plain dict/list and never raises to JavaScript.
 """
 
+import csv
+import datetime
+import io
 import json
 import os
 import subprocess
 import sys
 
+from analysis_stats import compute as compute_stats
 from result_parser import ResultFormatError, parse_result
 
 GUI_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -43,6 +47,7 @@ class Api:
         self._engine = engine
         self._find_engine = find_engine
         self._window = None              # set by app.py; private so JS cannot see it
+        self._last = None                # the last run: {"code", "result", "time"} (for §3)
         os.makedirs(RUNTIME_DIR, exist_ok=True)
 
     # ------------------------------------------------------------------ engine
@@ -62,7 +67,43 @@ class Api:
 
     def run(self, code):
         """Save code as program.txt, run the engine, return the parsed result.txt."""
-        return self._run_in(code, RUNTIME_DIR)
+        res = self._run_in(code, RUNTIME_DIR)
+        if res.get("ok"):
+            self._last = {"code": code, "result": res["result"], "time": datetime.datetime.now()}
+        return res
+
+    # ------------------------------------------------------------------ §3 analysis
+    def analysis(self):
+        """Counts and summaries of the LAST run (see analysis_stats.py)."""
+        if self._last is None:
+            return {"ok": False}
+        return {"ok": True, "time": self._last["time"].strftime("%H:%M"),
+                "date": self._last["time"].strftime("%d %b %Y"),
+                "stats": compute_stats(self._last["result"], self._last["code"])}
+
+    def export_trace(self, file_name="trace.csv"):
+        """Save the last run's trace as CSV (one row per step) through a save dialog."""
+        if self._last is None:
+            return {"ok": False, "error": "Run a program first."}
+        out = io.StringIO()
+        w = csv.writer(out, lineterminator="\n")
+        w.writerow(["step", "line", "instruction", "AX", "BX", "CX", "DX", "ZF"])
+        lines = self._last["code"].replace("\r\n", "\n").split("\n")
+        for st in self._last["result"]["steps"]:
+            text = lines[st["line"] - 1].strip() if st["line"] <= len(lines) else ""
+            w.writerow([st["n"], st["line"], text, st["ax"], st["bx"], st["cx"], st["dx"], st["zf"]])
+        w.writerow(["END", self._last["result"]["end"]["type"], self._last["result"]["end"]["value"]])
+        try:
+            chosen = self._window.create_file_dialog(SAVE_DIALOG, save_filename=file_name,
+                                                     file_types=("CSV files (*.csv)", "All files (*.*)"))
+            if not chosen:
+                return {"ok": False, "cancelled": True}
+            path = chosen[0] if isinstance(chosen, (list, tuple)) else chosen
+            with open(path, "w", encoding="utf-8", newline="") as f:
+                f.write(out.getvalue())
+            return {"ok": True, "path": path, "name": os.path.basename(path)}
+        except Exception as e:
+            return {"ok": False, "error": f"Could not save the trace: {e}"}
 
     def run_demo(self, demo_id):
         """Run a demo in its own folder (runtime/demo) for the cover's idle animation,

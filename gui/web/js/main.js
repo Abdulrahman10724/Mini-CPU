@@ -2,7 +2,7 @@
 // Flow of one run:  editor text -> api.run() -> Python writes program.txt, runs CPU.exe,
 // parses result.txt -> state.result -> every component re-renders from state.
 
-import { state, update, subscribe, totalSteps, errorOnLine, stateAt, indexes } from "./state.js";
+import { state, update, subscribe, totalSteps, errorOnLine, stateAt, indexes, lineText as lineTextOf } from "./state.js";
 import { setHighlight, getHighlight, onHighlight } from "./highlight.js";
 import { api } from "./api.js";
 import { toast } from "./toast.js";
@@ -14,6 +14,7 @@ import { confirmDialog } from "./dialog.js";
 import { initRouter, go, currentPage, setAnalysisAvailable, PAGES } from "./router.js";
 import { initCover, renderCoverEngine, renderOrders, coverKeys } from "./cover.js";
 import { initChip, chipShown, chipHidden, setDemoTrace } from "./chip.js";
+import { initAnalysis, renderAnalysis } from "./analysis.js";
 import { initHistory, renderHistory, markLineRows } from "./history.js";
 import { initWaveform, renderWaveform, setTraceLink, previewStep } from "./waveform.js";
 import { initHelp, renderHelp } from "./help.js";
@@ -296,6 +297,7 @@ function closeDemos() {
 function onShowPage(page) {
   if (page === "cover") chipShown();
   else chipHidden();
+  if (page === "analysis") renderAnalysis(state);
   if (page === "workbench") {
     getEditor().refresh();                          // CodeMirror measures itself again
     window.dispatchEvent(new Event("resize"));
@@ -490,6 +492,20 @@ async function boot() {
     },
   });
   subscribe(renderCoverEngine);
+  initAnalysis({
+    isVisible: () => currentPage() === "analysis",
+    goWorkbench: () => go("workbench"),
+    openAt: (k) => { go("workbench"); stopPlaying(); goTo(k); },
+    openLine: (line) => { go("workbench"); jumpToLine(line); },
+    lineOfStep: (k) => stateAt(k).line,
+    textOfStep: (k) => lineTextOf(stateAt(k).line),
+    exportTrace: async () => {
+      const res = await api.exportTrace(state.fileName.replace(/\.txt$/i, "") + "_trace.csv");
+      if (res.ok) toast(`Saved ${res.name}`);
+      else if (!res.cancelled) toast(res.error, "red");
+    },
+  });
+  subscribe((s, patch) => { if ("result" in patch && currentPage() === "analysis") renderAnalysis(s); });
   initRouter({ onShow: onShowPage });               // after the cover and chip exist
   update({ engine: await api.engineStatus() });
   if (state.engine.state !== "missing") {           // the chip's idle demo: demo 03's real trace
