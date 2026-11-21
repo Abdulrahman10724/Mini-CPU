@@ -144,7 +144,7 @@ button, input { font: inherit; color: inherit; }
 .tabs { display: flex; }
 .tabs button {
   height: 30px; min-width: 26px; padding: 0 4px; border: 0; background: none; cursor: pointer;
-  font: 500 13px/1 var(--font-mono); color: var(--ink-2);
+  font: 500 15px/1 var(--font-mono); color: var(--ink-2);   /* ¼ and ½ need the size to read */
   border-bottom: 2px solid transparent;
 }
 .tabs button:hover { color: var(--ink); }

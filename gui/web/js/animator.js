@@ -107,8 +107,8 @@ function makeLabel(layer, text) {
   const g = document.createElementNS(SVG, "g");
   g.setAttribute("class", "data-label");
   const content = text === undefined || text === "" ? "" : String(text);
-  const w = content ? content.length * 7.2 + 10 : 8;
-  const h = content ? 17 : 8;
+  const w = content ? content.length * 8 + 12 : 8;    // 13px Plex Mono is about 8px per char
+  const h = content ? 20 : 8;
   const rect = document.createElementNS(SVG, "rect");
   rect.setAttribute("x", -w / 2);
   rect.setAttribute("y", -h / 2);
@@ -118,7 +118,7 @@ function makeLabel(layer, text) {
   if (content) {
     const t = document.createElementNS(SVG, "text");
     t.setAttribute("text-anchor", "middle");
-    t.setAttribute("y", 4);
+    t.setAttribute("y", 4.5);
     t.textContent = content;
     g.append(t);
   }

@@ -26,48 +26,48 @@
 .wire[data-on] { stroke: var(--ink); stroke-width: var(--stroke-active); transition: stroke .05s, stroke-width .05s; }
 .wire.discarded { stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 5 5; }
 .stub { stroke: var(--ink); stroke-width: var(--stroke); }
-#datapath .fig-label { font-size: 10px; letter-spacing: .08em; fill: var(--ink-3); }
-#datapath .discard-label { font-size: 11px; font-style: italic; fill: var(--ink-2); }
+#datapath .fig-label { font-size: 12px; letter-spacing: .08em; fill: var(--ink-3); }
+#datapath .discard-label { font-size: 13px; font-style: italic; fill: var(--ink-2); }
 
 /* ---------------------------------------------------------------- blocks */
 .block-box { fill: var(--paper); stroke: var(--ink); stroke-width: var(--stroke); stroke-linejoin: miter; }
 .hatch { fill: url(#hatch); stroke: none; opacity: 0; transition: opacity .12s; pointer-events: none; }
 .block[data-on] .hatch { opacity: 1; }
-#datapath .block-label { font-size: 10px; letter-spacing: .08em; fill: var(--ink-3); }
+#datapath .block-label { font-size: 12px; letter-spacing: .08em; fill: var(--ink-3); }
 
 /* PC: boxed form-field cells */
 .form-cell { fill: var(--paper); stroke: var(--ink); stroke-width: 1; }
 .counter-strip { transition: transform .3s cubic-bezier(.3, .7, .2, 1); }
-#datapath .pc-digit { font-size: 44px; font-weight: 500; text-anchor: middle; fill: var(--ink); }
-#datapath .pc-next { font-size: 13px; fill: var(--ink-2); }
+#datapath .pc-digit { font-size: 50px; font-weight: 500; text-anchor: middle; fill: var(--ink); }
+#datapath .pc-next { font-size: 15px; fill: var(--ink-2); }
 #datapath .pc-next[data-tone="spot"] { fill: var(--spot-text); }
 
 /* IMEM */
 .imem-hi { fill: none; }
 .imem-hi[data-tone="current"] { fill: var(--spot-wash); }
 .imem-hi[data-tone="error"] { fill: var(--spot-wash); stroke: var(--spot); stroke-width: 1; }
-#datapath .imem-num { font-size: 13px; fill: var(--ink-3); }
-#datapath .imem-text { font-size: 13px; fill: var(--ink-2); }
-#datapath .imem-mark { font-size: 10px; fill: var(--spot-text); }
+#datapath .imem-num { font-size: 16px; fill: var(--ink-3); }
+#datapath .imem-text { font-size: 16px; fill: var(--ink-2); }
+#datapath .imem-mark { font-size: 12px; fill: var(--spot-text); }
 .imem-row[data-current="true"] .imem-text { fill: var(--ink); font-weight: 600; }
 .imem-under { stroke: var(--spot); stroke-width: 2; visibility: hidden; }
 .imem-row[data-hover="true"] .imem-under { visibility: visible; }
 
 /* DECODER */
-#datapath .dec-key { font-size: 13px; fill: var(--ink-3); }
-#datapath .dec-val { font-size: 18px; font-weight: 500; }
-#datapath .dec-error { font-size: 12px; font-weight: 500; fill: var(--spot-text); }
+#datapath .dec-key { font-size: 15px; fill: var(--ink-3); }
+#datapath .dec-val { font-size: 22px; font-weight: 500; }
+#datapath .dec-error { font-size: 14px; font-weight: 500; fill: var(--spot-text); }
 #datapath .dec-question { font-size: 44px; font-weight: 500; }
 
 /* REGFILE: a ledger table */
 .ledger-rule-ink { stroke: var(--ink); stroke-width: 1; }
 .ledger-rule { stroke: var(--rule); stroke-width: 1; }
-#datapath .ledger-head { font-size: 10px; letter-spacing: .1em; fill: var(--ink-3); }
-#datapath .ledger-reg { font-size: 15px; font-weight: 600; }
-#datapath .ledger-prev { font-size: 15px; fill: var(--ink-3); }
-#datapath .ledger-now { font-size: 15px; font-weight: 500; }
-#datapath.bin .ledger-now { font-size: 10.5px; }
-.ledger-strike { stroke: var(--ink); stroke-width: 1.5; stroke-dasharray: 100; animation: strike .2s ease-out; }
+#datapath .ledger-head { font-size: 12px; letter-spacing: .1em; fill: var(--ink-3); }
+#datapath .ledger-reg { font-size: 18px; font-weight: 600; }
+#datapath .ledger-prev { font-size: 18px; fill: var(--ink-3); }
+#datapath .ledger-now { font-size: 18px; font-weight: 500; }
+#datapath.bin .ledger-now { font-size: 11px; }
+.ledger-strike { stroke: var(--ink); stroke-width: 2; stroke-dasharray: 100; animation: strike .2s ease-out; }
 @keyframes strike { from { stroke-dashoffset: 100; } }
 #datapath .ledger-now.fresh { animation: settle 1s steps(1, end) forwards; }
 @keyframes settle { 0% { fill: var(--spot-text); } 80% { fill: var(--spot-text); } 100% { fill: var(--ink); } }
@@ -76,24 +76,24 @@
 
 .fmt-tab { cursor: pointer; outline: none; }
 .fmt-hit { fill: transparent; }
-#datapath .fmt-label { font-size: 10.5px; letter-spacing: .06em; fill: var(--ink-3); }
+#datapath .fmt-label { font-size: 12px; letter-spacing: .06em; fill: var(--ink-3); }
 .fmt-under { stroke: var(--spot); stroke-width: 2; visibility: hidden; }
 .fmt-tab[data-active="true"] .fmt-under { visibility: visible; }
 #datapath .fmt-tab[data-active="true"] .fmt-label, #datapath .fmt-tab:hover .fmt-label { fill: var(--ink); }
 .fmt-tab:focus-visible .fmt-hit { stroke: var(--spot); stroke-width: 1.5; }
 
 /* ALU */
-#datapath .alu-port { font-size: 11px; fill: var(--ink-3); }
-#datapath .alu-symbol { font-size: 40px; font-weight: 500; }
-#datapath .alu-symbol[data-size="small"] { font-size: 22px; letter-spacing: .06em; }
+#datapath .alu-port { font-size: 13px; fill: var(--ink-3); }
+#datapath .alu-symbol { font-size: 50px; font-weight: 500; }
+#datapath .alu-symbol[data-size="small"] { font-size: 26px; letter-spacing: .06em; }
 .one-chip rect { fill: var(--paper); stroke: var(--ink); stroke-width: 1; }
-#datapath .one-chip text { font-size: 12px; font-weight: 600; }
+#datapath .one-chip text { font-size: 14px; font-weight: 600; }
 
 /* FLAGS: ZF as a printed circle */
 .zf-disc { fill: var(--paper); stroke: var(--ink); stroke-width: 2; transition: fill .15s; }
 .zf-disc.on { fill: var(--ink); }
-#datapath .zf-label { font-size: 15px; font-weight: 600; }
-#datapath .zf-caption { font-size: 11px; fill: var(--ink-3); }
+#datapath .zf-label { font-size: 18px; font-weight: 600; }
+#datapath .zf-caption { font-size: 13px; fill: var(--ink-3); }
 
 /* condition gate */
 .gate-box { fill: var(--paper); stroke: var(--ink); stroke-width: var(--stroke); }
@@ -102,7 +102,7 @@
 
 /* data labels (animator.js): red rectangle, white value */
 .data-label rect { fill: var(--spot-text); }
-#datapath .data-label text { font-size: 11px; font-weight: 600; fill: #FFFFFF; }
+#datapath .data-label text { font-size: 13px; font-weight: 600; fill: #FFFFFF; }
 
 /* red pen (ERRSTOP on the decoder) */
 #datapath .red-pen path { fill: none; stroke: var(--spot); stroke-width: 1.5; stroke-linecap: round;

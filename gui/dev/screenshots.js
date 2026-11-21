@@ -9,7 +9,7 @@ const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..", "..");
-const OUT = path.join(ROOT, "docs", "screens");
+const OUT = path.join(ROOT, "docs", "screens", "v2");
 const SHIM = path.join(__dirname, "shim.js");
 const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 
@@ -50,22 +50,22 @@ async function typeProgram(page, code) {
   await shot(page, "01_empty.png");
   await page.close();
 
-  // 2. demo 03 (loop sum) mid-run: step 6 being animated at 0.25x
+  // 2. demo 03 mid-run: step 6 (ADD AX, CX) at 0.25x, the operand labels on their wires
   page = await open(browser);
   await loadDemo(page, 2);
   await page.evaluate(() => { window.miniCpu.update({ speed: "0.25" }); window.miniCpu.goTo(5); });
   await page.evaluate(() => { window.miniCpu.goTo(6, { animate: true }); });
-  await page.waitForTimeout(3450);               // execute phase: write-back + flags
-  await shot(page, "02_loop_step6.png");
+  await page.waitForTimeout(2550);
+  await shot(page, "02_loop_step6_add.png");
   await page.close();
 
-  // 3. program with errors (tests/09_errors_1_to_4.txt), hovering an error line
+  // 3. errors (tests/09_errors_1_to_4.txt): red-pen ellipses, hovering an error line
   page = await open(browser);
   await typeProgram(page, read("tests/09_errors_1_to_4.txt"));
   const line = page.locator(".CodeMirror-line >> nth=2");
   const box = await line.boundingBox();
-  await page.mouse.move(box.x + 40, box.y + box.height / 2);
-  await page.waitForTimeout(200);
+  await page.mouse.move(box.x + 60, box.y + box.height / 2);
+  await page.waitForTimeout(300);
   await shot(page, "03_errors.png");
   await page.close();
 
@@ -74,21 +74,45 @@ async function typeProgram(page, code) {
   await loadDemo(page, 0);
   await page.evaluate(() => window.miniCpu.update({ speed: "2" }));
   await page.click("#runBtn");
-  await page.mouse.move(700, 600);               // no hover tooltip in the picture
+  await page.mouse.move(700, 450);
   await page.waitForFunction(() => window.miniCpu.state.playing, null, { timeout: 5000 });
   await page.waitForFunction(() => !window.miniCpu.state.playing, null, { timeout: 30000 });
   await page.waitForTimeout(900);
   await shot(page, "04_halted.png");
 
-  // 5. help drawer open (same page)
+  // 5. help sheet open (same page)
   await page.keyboard.press("F1");
   await page.waitForTimeout(400);
-  await shot(page, "05_help.png");
+  await shot(page, "07_help.png");
   await page.close();
 
-  // 6. engine missing
+  // 6. hovering AX: linked highlight in editor, ledger, trace, log (+ datapath wires)
+  page = await open(browser);
+  await loadDemo(page, 2);
+  await page.evaluate(() => window.miniCpu.goTo(6));
+  await page.waitForTimeout(200);
+  const ax = await page.locator(".cm-reg-AX >> nth=1").boundingBox();
+  await page.mouse.move(ax.x + 8, ax.y + 8);
+  await page.waitForTimeout(300);
+  await shot(page, "05_hover_ax.png");
+  await page.close();
+
+  // 7. waveform zoomed in on a 500-step LOOP program (tests/16_infinite_loop.txt)
+  page = await open(browser);
+  await typeProgram(page, read("tests/16_infinite_loop.txt"));
+  await page.evaluate(() => window.miniCpu.goTo(240));
+  const plot = await page.locator("#tracePlot").boundingBox();
+  await page.mouse.move(plot.x + plot.width / 2, plot.y + 60);
+  for (let i = 0; i < 4; i++) { await page.keyboard.down("Control"); await page.mouse.wheel(0, -100); await page.keyboard.up("Control"); }
+  await page.waitForTimeout(200);
+  await page.mouse.move(plot.x + plot.width / 2 + 90, plot.y + 60);
+  await page.waitForTimeout(250);
+  await shot(page, "06_trace_loop500_zoom.png");
+  await page.close();
+
+  // 8. engine missing
   page = await open(browser, 8766);
-  await shot(page, "06_engine_missing.png");
+  await shot(page, "08_engine_missing.png");
   await page.close();
 
   await browser.close();
