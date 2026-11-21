@@ -2,15 +2,16 @@
 // ink-weight syntax, pencil notes (inline results), the teacher's red pen for errors,
 // and live mode.
 //
-// Live mode: Enter runs CPU.exe at once; any other edit runs it 700 ms after the
-// user stops typing. The actual run is done by main.js (hooks.liveRun).
+// Live mode: CPU.exe runs only after the user STOPS typing for 900 ms (every key,
+// Enter too, restarts the timer). While waiting, the old results stay visible but
+// dimmed, and the line being typed shows no error. The run itself is in main.js.
 
 import { state, stateAt, describeStep, errorOnLine, indexes, REG_NAMES } from "./state.js";
 import { errorInfo } from "./errors.js";
 import { penStrokes } from "./pen.js";
 
 const OPCODES = ["MOV", "ADD", "SUB", "CMP", "INC", "DEC", "JMP", "JZ", "JNZ", "HLT"];
-const LIVE_DELAY_MS = 700;
+const LIVE_DELAY_MS = 900;
 const SVG = "http://www.w3.org/2000/svg";
 const LINE_PAD = 12;        // left padding of a code line (editor.css)
 
@@ -20,6 +21,8 @@ let liveTimer = null;
 let decorations = [];       // undo functions for everything drawn by the last redraw
 let lastResult;
 let lastCursor = -1;
+let waiting = false;        // edited since the last result: what is shown is "old"
+let lastEditLine = 1;       // the line of the latest edit (for the live replay)
 const drawnPens = new Set(); // red-pen marks already animated once (no re-animation on redraw)
 
 // ------------------------------------------------------------------ syntax mode
@@ -54,15 +57,21 @@ export function initEditor(host, editorHooks) {
     smartIndent: false,
     electricChars: false,
     lineWrapping: false,
-    extraKeys: { Enter: onEnter },
   });
 
   cm.on("changes", (_, changes) => {
     const programmatic = changes.every((c) => c.origin === "setValue");
     hooks.onCodeChange(cm.getValue(), { programmatic });
-    if (!programmatic) scheduleLiveRun();
+    if (!programmatic) {
+      lastEditLine = changes[changes.length - 1].from.line + 1;
+      setWaiting(true);
+      scheduleLiveRun();
+    }
   });
-  cm.on("cursorActivity", markActiveLine);
+  cm.on("cursorActivity", () => {
+    markActiveLine();
+    if (waiting) cm.operation(redrawDecorations);   // the hidden error follows the cursor
+  });
   // the margin: line number = jump to that line's last execution; left strip = breakpoint
   cm.on("gutterClick", (_, line, gutter) => {
     if (gutter === "bp-gutter") hooks.onToggleBreakpoint(line + 1);
@@ -95,26 +104,43 @@ export function insertLine(text) {
 }
 
 // ------------------------------------------------------------------ live mode
-function onEnter(editor) {
-  const lineBefore = editor.getCursor().line + 1;        // the line the user just finished
-  editor.execCommand("newlineAndIndent");
-  clearTimeout(liveTimer);
-  hooks.liveRun(editor.getValue(), lineBefore);
-}
-
+// Debounce: every edit restarts the 900 ms timer; CPU.exe runs when it finally fires.
 function scheduleLiveRun() {
   clearTimeout(liveTimer);
-  liveTimer = setTimeout(() => hooks.liveRun(cm.getValue(), cm.getCursor().line + 1), LIVE_DELAY_MS);
+  liveTimer = setTimeout(() => {
+    liveTimer = null;
+    Promise.resolve(hooks.liveRun(cm.getValue(), lastEditLine)).finally(() => {
+      // nothing new typed and no run busy: stop waiting (e.g. engine missing)
+      if (liveTimer === null && !state.running) setWaiting(false);
+    });
+  }, LIVE_DELAY_MS);
 }
 
 export function cancelLiveRun() {
   clearTimeout(liveTimer);
+  liveTimer = null;
+}
+
+// Waiting = results on screen belong to older code: dim them and show "…".
+function setWaiting(on) {
+  if (waiting === on) return;
+  waiting = on;
+  const wrapper = cm.getWrapperElement();
+  wrapper.classList.toggle("stale", on);
+  if (!on) {                                   // new results: fade back in (200 ms)
+    wrapper.classList.remove("fresh");
+    void wrapper.offsetWidth;
+    wrapper.classList.add("fresh");
+  }
+  renderHeader(state);
+  cm.operation(redrawDecorations);
 }
 
 // ------------------------------------------------------------------ render
 export function renderEditor(s, patch) {
   if (!cm) return;
   if ("running" in patch) document.getElementById("runProgress").classList.toggle("active", s.running);
+  if ("result" in patch && liveTimer === null) setWaiting(false);   // the new result arrived
   if ("code" in patch || "result" in patch) renderHeader(s);
   if (s.result !== lastResult || s.cursor !== lastCursor || "code" in patch || "breakpoints" in patch) {
     lastResult = s.result;
@@ -135,6 +161,8 @@ function renderHeader(s) {
   const errors = s.result ? s.result.errors.length : 0;
   const el = document.getElementById("programStatus");
   el.innerHTML = "";
+  if (waiting) { el.textContent = "…"; el.title = "Waiting for you to stop typing"; return; }
+  el.title = "";
   const part = (text, bad) => {
     const span = document.createElement("span");
     span.textContent = text;
@@ -193,13 +221,15 @@ function redrawDecorations() {
     execCount.set(ln, (execCount.get(ln) || 0) + 1);
   }
   const pcLine = stateAt(k).line;
+  const typingLine = waiting ? cm.getCursor().line + 1 : 0;   // no error shown here while typing
 
   for (let n = 1; n <= cm.lineCount(); n++) {
     const idx = n - 1;
     const code = errorOnLine(n);
     if (code) {
+      if (n === typingLine) continue;
       addLineClass(idx, "wrap", "line-error");
-      redPen(idx, `${n}:${cm.getLine(idx)}:${code}`);
+      redPen(idx, code);
       note(idx, `✗ E${code} ${errorInfo(code).message}`, "pencil-err");
       continue;
     }
@@ -228,23 +258,48 @@ function noteHtml(j, count) {
 }
 
 // ------------------------------------------------------------------ the red pen
-// A hand-drawn ellipse around the text of an error line: two slightly different
-// strokes (rotated ±2°), drawn with stroke-dashoffset the first time it appears.
-function redPen(idx, key) {
+// A hand-drawn ellipse around the FAULTY TOKEN of an error line (two slightly
+// different strokes, drawn with stroke-dashoffset the first time it appears).
+// Which token to circle is chosen only for display; CPU.exe decided the error.
+const OPERANDS = { MOV: 2, ADD: 2, SUB: 2, CMP: 2, INC: 1, DEC: 1, JMP: 1, JZ: 1, JNZ: 1, HLT: 0 };
+
+// The character range to circle: { s, e } (e exclusive), or { s, dot: true } for a
+// small circle (missing operand: at the end of the line).
+function penTarget(text, code) {
+  const words = [...text.matchAll(/[^\s,]+/g)].map((m) => ({ s: m.index, e: m.index + m[0].length, w: m[0].toUpperCase() }));
+  if (words.length === 0) return null;
+  const whole = { s: words[0].s, e: words[words.length - 1].e };
+  const isJump = ["JMP", "JZ", "JNZ"].includes(words[0].w);
+  switch (code) {
+    case 1: return words[0];                                             // unknown opcode
+    case 8: return words[1] || whole;                                    // first operand not a register
+    case 2: return words[1] && !REG_NAMES.includes(words[1].w) ? words[1] : words[2] || whole;
+    case 5: case 6: return (isJump ? words[1] : words[2]) || whole;      // the number
+    case 3: return { s: text.trimEnd().length + 1, dot: true };          // something is missing here
+    case 4: {                                                            // the extra operand(s)
+      const first = words[(OPERANDS[words[0].w] ?? 0) + 1];
+      return first ? { s: first.s, e: words[words.length - 1].e } : whole;
+    }
+    default: return whole;
+  }
+}
+
+function redPen(idx, code) {
   const text = cm.getLine(idx);
-  const start = text.search(/\S/);
-  if (start < 0) return;
-  const end = text.trimEnd().length;
+  const t = penTarget(text, code);
+  if (!t) return;
   const cw = cm.defaultCharWidth();
-  const w = (end - start) * cw + 18;
-  const h = 19;                                      // fits inside one 24px ruled line
+  const w = t.dot ? 14 : Math.max(18, (t.e - t.s) * cw + 12);
+  const h = t.dot ? 14 : 19;                           // fits inside one 24px ruled line
+  const centre = t.dot ? (t.s + 0.5) * cw : ((t.s + t.e) / 2) * cw;
+  const key = `${idx}:${text}:${code}`;
   const svg = document.createElementNS(SVG, "svg");
   svg.setAttribute("class", "red-pen" + (drawnPens.has(key) ? " drawn" : ""));
   svg.setAttribute("width", w + 8);
   svg.setAttribute("height", h + 6);
-  // centre the ellipse on the text: the path's centre is at w/2 + 4 inside the svg
-  svg.style.left = `${LINE_PAD + start * cw + (end - start) * cw / 2 - (w / 2 + 4)}px`;
-  svg.style.top = "-1px";                            // centre on the line: (24 - (h + 6)) / 2
+  // the path's centre is at (w/2 + 4, h/2 + 3) inside the svg
+  svg.style.left = `${LINE_PAD + centre - (w / 2 + 4)}px`;
+  svg.style.top = `${(24 - (h + 6)) / 2}px`;
   penStrokes(svg, w, h);
   drawnPens.add(key);
   const holder = document.createElement("span");
@@ -312,13 +367,18 @@ function onHover(e) {
     `<div class="slip-hint">Click the line number to jump there.</div>`);
 }
 
+// The slip never covers code or margin notes: it opens just OUTSIDE the notebook's
+// right margin, with its bottom edge at the top of the hovered line (or below the
+// line when there is no room above).
 function showSlip(e, box, html) {
   const tip = document.getElementById("errTip");
   tip.innerHTML = html;
-  const app = document.getElementById("app").getBoundingClientRect();
-  tip.style.left = `${Math.min(e.clientX - app.left + 12, app.width - 330)}px`;
-  tip.style.top = `${box.bottom - app.top + 6}px`;
   tip.hidden = false;
+  const app = document.getElementById("app").getBoundingClientRect();
+  const notebook = cm.getWrapperElement().getBoundingClientRect();
+  tip.style.left = `${notebook.right - app.left + 10}px`;
+  const above = box.top - app.top - tip.offsetHeight - 2;
+  tip.style.top = `${above >= notebook.top - app.top ? above : box.bottom - app.top + 2}px`;
 }
 
 function hideSlip() {

@@ -87,3 +87,10 @@
 .cm-s-notebook .cm-register { cursor: default; }
 /* a hovered step: a red band under its line (the current step is a solid wash + ▶) */
 .cm-s-notebook .line-linked { box-shadow: inset 0 -2px 0 var(--spot); }
+
+/* live mode: while waiting for the user to stop typing, older results are dimmed;
+   new results fade back in over 200 ms */
+.cm-s-notebook .pencil, .cm-s-notebook .red-pen { transition: opacity .2s; }
+.cm-s-notebook.stale .pencil, .cm-s-notebook.stale .red-pen { opacity: .5; }
+.cm-s-notebook.fresh .pencil, .cm-s-notebook.fresh .red-pen { animation: results-in .2s ease-out; }
+@keyframes results-in { from { opacity: .5; } }

@@ -90,7 +90,7 @@
 #datapath .one-chip text { font-size: 14px; font-weight: 600; }
 
 /* FLAGS: ZF as a printed circle */
-.zf-disc { fill: var(--paper); stroke: var(--ink); stroke-width: 2; transition: fill .15s; }
+.zf-disc { fill: var(--paper); stroke: var(--ink); stroke-width: 2.5; transition: fill .15s; }
 .zf-disc.on { fill: var(--ink); }
 #datapath .zf-label { font-size: 18px; font-weight: 600; }
 #datapath .zf-caption { font-size: 13px; fill: var(--ink-3); }

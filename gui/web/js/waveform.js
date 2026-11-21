@@ -18,7 +18,7 @@ const $ = (id) => document.getElementById(id);
 const ROWS = ["PC", "AX", "BX", "CX", "DX", "ZF", "JMP"];
 const X0 = 8;                 // left margin inside the plot
 const END_W = 110;            // room after the last column for the END tag
-const RULER_H = 20;
+const RULER_H = 34;           // top band: the "t = N" flag, then the step numbers
 const MIN_W = 1.5, MAX_W = 64;
 
 let hooks = null;

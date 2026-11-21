@@ -222,9 +222,9 @@ function buildBlocks(layer) {
 
   // ---- U4 FLAGS: ZF as a printed circle (hollow ring = 0, solid disc = 1)
   const flags = block(layer, "flags");
-  dp.zfDisc = el("circle", { cx: 110, cy: 494, r: 24, class: "zf-disc" }, flags);
-  dp.zfText = txt(flags, 110, 562, "ZF = 0", "zf-label", { "text-anchor": "middle" });
-  txt(flags, 110, 588, "(result = 0)", "zf-caption", { "text-anchor": "middle" });
+  dp.zfDisc = el("circle", { cx: 110, cy: 492, r: 46, class: "zf-disc" }, flags);
+  dp.zfText = txt(flags, 110, 576, "ZF = 0", "zf-label", { "text-anchor": "middle" });
+  txt(flags, 110, 602, "(result = 0)", "zf-caption", { "text-anchor": "middle" });
 }
 
 function buildGate(layer) {

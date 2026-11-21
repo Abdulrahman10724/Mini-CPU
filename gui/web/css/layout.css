@@ -141,7 +141,7 @@ button, input { font: inherit; color: inherit; }
 .icon-fill { fill: currentColor; }
 
 /* printed tab row (speed): the selected one is underlined in spot */
-.tabs { display: flex; }
+.tabs { display: flex; gap: 6px; }
 .tabs button {
   height: 30px; min-width: 26px; padding: 0 4px; border: 0; background: none; cursor: pointer;
   font: 500 15px/1 var(--font-mono); color: var(--ink-2);   /* ¼ and ½ need the size to read */

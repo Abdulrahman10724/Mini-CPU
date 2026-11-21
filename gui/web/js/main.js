@@ -50,7 +50,7 @@ async function runCode(code, mode, lineHint = null) {
 function applyResult(result, code, mode, lineHint) {
   stopPlaying();
   const N = result.steps.length;
-  $("analysisBtn").hidden = false;
+  // the ANALYSIS button stays hidden until the Analysis page exists
 
   if (mode === "run") {                     // Run: from step 0, animated to the end
     update({ result, resultCode: code, cursor: 0 });
@@ -299,7 +299,7 @@ function wireTopBar() {
   $("saveBtn").addEventListener("click", saveFile);
   $("logoBtn").addEventListener("click", () => navigate("home"));
   $("analysisBtn").addEventListener("click", () => navigate("analysis"));
-  $("runBtn").addEventListener("click", () => runCode(state.code, "run"));
+  $("runBtn").addEventListener("click", () => { cancelLiveRun(); runCode(state.code, "run"); });
   $("stepBtn").addEventListener("click", stepForward);
   $("resetBtn").addEventListener("click", resetTimeline);
 }
@@ -314,7 +314,7 @@ function onKeyDown(e) {
   const ctrl = e.ctrlKey || e.metaKey;
   const typing = inEditor(e) || ["INPUT", "TEXTAREA"].includes(e.target.tagName);
   let handled = true;
-  if (ctrl && e.key === "Enter") runCode(state.code, "run");
+  if (ctrl && e.key === "Enter") { cancelLiveRun(); runCode(state.code, "run"); }
   else if (e.key === "F10" && e.shiftKey) stepBack();
   else if (e.key === "F10") stepForward();
   else if (ctrl && e.code === "Space") togglePlay();
