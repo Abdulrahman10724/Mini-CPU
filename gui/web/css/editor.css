@@ -1,0 +1,79 @@
+/* editor.css - the program panel as a ruled school notebook page.
+   Ruled lines every 24px (= line height), a red margin line, ink-weight syntax,
+   pencil notes on the right, and the teacher's red pen for errors. */
+
+.editor-body { position: relative; flex: 1; min-height: 0; border: 1px solid var(--rule); border-top: 0; }
+
+.cm-s-notebook.CodeMirror {
+  height: 100%;
+  background: var(--paper-2);
+  color: var(--ink);
+  font: 400 var(--fs-code)/var(--lh-code) var(--font-mono);
+}
+/* the ruled lines: drawn on the scroller and scrolled WITH the text (attachment: local) */
+.cm-s-notebook .CodeMirror-scroll {
+  background-image: repeating-linear-gradient(to bottom,
+    transparent 0 calc(var(--lh-code) - 1px), var(--rule) calc(var(--lh-code) - 1px) var(--lh-code));
+  background-position: 0 8px;
+  background-attachment: local;
+}
+.cm-s-notebook .CodeMirror-lines { padding: 8px 0; }
+.cm-s-notebook pre.CodeMirror-line, .cm-s-notebook pre.CodeMirror-line-like { padding: 0 12px; }
+
+/* the margin: line numbers, then the red margin line */
+.cm-s-notebook .CodeMirror-gutters {
+  background: transparent;
+  border-right: 1px solid rgba(217, 72, 15, .4);
+}
+.cm-s-notebook .bp-gutter { width: 18px; cursor: pointer; }
+.cm-s-notebook .CodeMirror-linenumber {
+  min-width: 30px; padding: 0 8px 0 4px; cursor: pointer;
+  font: 400 12px/var(--lh-code) var(--font-mono); color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.cm-s-notebook .CodeMirror-linenumber:hover { color: var(--ink); text-decoration: underline; }
+/* the line of the current step: number in spot with a small ▶ */
+.cm-s-notebook .pc-line-gutter .CodeMirror-linenumber { color: var(--spot-text); font-weight: 600; }
+.cm-s-notebook .pc-line-gutter .CodeMirror-linenumber::before { content: "▶"; font-size: 9px; margin-right: 3px; }
+.bp-mark { display: block; text-align: center; font-size: 11px; line-height: var(--lh-code); color: var(--ink); }
+
+.cm-s-notebook .CodeMirror-cursor { border-left: 2px solid var(--spot); }
+.cm-s-notebook .CodeMirror-selected,
+.cm-s-notebook.CodeMirror-focused .CodeMirror-selected { background: var(--paper-3) !important; }
+.cm-s-notebook .CodeMirror-placeholder { color: var(--ink-3) !important; }
+.cm-s-notebook .cm-active-line { background: rgba(27, 26, 23, .03); }
+
+/* syntax: ink weight, not colour */
+.cm-s-notebook .cm-opcode   { font-weight: 600; color: var(--ink); }
+.cm-s-notebook .cm-register { color: var(--ink); }
+.cm-s-notebook .cm-number   { color: var(--ink-2); }
+.cm-s-notebook .cm-comma    { color: var(--ink-3); }
+
+/* the line executed at the current step: a solid wash across the full width */
+.cm-s-notebook .line-pc { background: var(--spot-wash); }
+
+/* pencil notes: a right-aligned column of results */
+.pencil {
+  position: absolute; top: 0; right: 14px;
+  font: 400 12px/var(--lh-code) var(--font-mono); color: var(--ink-3);
+  white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums;
+}
+.pencil-count { margin-left: 10px; }
+.pencil-err { color: var(--spot-text); font-weight: 500; }
+
+/* the red pen: a hand-drawn ellipse around an error line */
+.red-pen { position: absolute; pointer-events: none; overflow: visible; }
+.red-pen path {
+  fill: none; stroke: var(--spot); stroke-width: 1.5; stroke-linecap: round;
+  stroke-dasharray: 100; stroke-dashoffset: 0;
+  animation: pen-draw .25s ease-out backwards;
+}
+.red-pen.drawn path { animation: none; }
+@keyframes pen-draw { from { stroke-dashoffset: 100; } }
+
+/* hover slip for an error line (paper slip, see .slip in layout.css) */
+.hover-slip { position: absolute; z-index: 70; width: 320px; padding: 9px 12px; pointer-events: none; }
+.slip-head { font: 500 12px/1.4 var(--font-mono); }
+.slip-code { color: var(--spot-text); margin-right: 4px; }
+.slip-hint { margin-top: 2px; font: 400 12px/1.45 var(--font-ui); color: var(--ink-2); }
+.slip-rows { margin-top: 4px; font: 400 12px/1.5 var(--font-mono); color: var(--ink-2); }
