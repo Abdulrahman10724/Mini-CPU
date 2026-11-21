@@ -1,5 +1,5 @@
-/* print.css - "PRINT REPORT" on §3: a clean A4 portrait report (the user can Save as PDF).
-   White paper, black ink, the spot red kept. Order: Table 1, Fig. 3, Fig. 4, Fig. 5, Table 2. */
+/* print.css - "PRINT REPORT" on the Analysis page: a clean A4 portrait report (the user
+   can Save as PDF). White paper, black ink, the spot red kept. Order: Table 1, Fig. 3, Table 2. */
 
 @media print {
   @page {
@@ -14,7 +14,7 @@
 
   .app { display: block; height: auto; min-width: 0; min-height: 0; padding: 0; border-top: 0; }
   .masthead, .sheet-foot, .page:not(.page-analysis), .an-head, .an-actions, .trace-filters,
-  .help-sheet, .popover, .hover-slip, .toast-host, .dialog-backdrop, .chart-slip, .crosshair { display: none !important; }
+  .help-sheet, .hover-slip, .toast-host, .dialog-backdrop { display: none !important; }
   .pages, .page, .page-analysis { position: static; overflow: visible; height: auto; }
   .page.page-in { animation: none; }
 
@@ -23,10 +23,11 @@
     font: 9.5pt/1.5 "IBM Plex Mono", monospace; color: var(--ink); }
   .print-title { font: 600 18pt/1.2 "IBM Plex Sans", sans-serif; margin-bottom: 4pt; }
 
+  /* one column: Table 1, Fig. 3 (the whole listing, no inner scroll), Table 2 */
   .an-grid { display: flex; flex-direction: column; gap: 16pt; margin: 0; }
-  .an-t1 { order: 1; } .an-fig3 { order: 2; } .an-fig4 { order: 3; } .an-fig5 { order: 4; } .an-t2 { order: 5; }
-  .an-t1, .an-fig3, .an-fig4, .an-fig5 { break-inside: avoid; }
-  .chart { max-width: 100%; height: auto; }          /* drawn at A4 width before printing */
+  .prof-host, .profile { flex: none; height: auto; min-height: 0; }
+  .profile { overflow: visible; }
+  .an-t1, .an-prof { break-inside: avoid; }
   .trace-table thead { display: table-header-group; }          /* repeated on every page */
   .trace-table tr { break-inside: avoid; }
   .trace-table tr.off, .trace-table tbody tr[data-k] { display: table-row !important; }   /* print every step */

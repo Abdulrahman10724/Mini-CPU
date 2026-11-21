@@ -1,4 +1,5 @@
-/* analysis.css - §3 ANALYSIS, the characterization report (screen). Print: print.css */
+/* analysis.css - ANALYSIS, the characterization report (screen). Print: print.css
+   Table 1 | Fig. 3 side by side (same height, aligned at the top), Table 2 below. */
 
 .page-analysis { overflow-y: auto; }
 .an-wrap { max-width: 1320px; margin: 0 auto; padding: 20px 0 40px; }
@@ -10,58 +11,33 @@
 .an-actions { display: flex; gap: 8px; }
 .print-head { display: none; }
 
-/* a 12-column grid; each block is a table or figure with a numbered caption */
-.an-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); column-gap: 32px; row-gap: 30px; margin-top: 22px; }
+/* two halves; each block has its numbered caption above it */
+.an-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 40px; row-gap: 30px; margin-top: 22px; }
 .an-block { margin: 0; min-width: 0; }
-.an-t1 { grid-column: span 5; }
-.an-fig4 { grid-column: span 7; }
-.an-fig3, .an-rest { grid-column: 1 / -1; }
-.an-rest { display: contents; }
-.tcaption { margin: 0 0 8px; font: italic 400 13px/1.35 var(--font-serif); color: var(--ink-2); }  /* tables: caption above */
-.an-block .caption { text-align: left; }                                                         /* figures: caption below */
+.tcaption { margin: 0 0 8px; font: italic 400 13px/1.35 var(--font-serif); color: var(--ink-2); }
 
 .an-table td.mono { font-family: var(--font-mono); color: var(--ink); white-space: nowrap; }
 .an-table td.red { color: var(--spot-text); font-weight: 600; }
 .an-table td:first-child { color: var(--ink); }
 
-/* charts (charts.js) */
-.chart-host { position: relative; }
-.chart { display: block; overflow: visible; }
-.chart text { font-family: var(--font-mono); }
-.chart-tick { font-size: 11px; fill: var(--ink-3); }
-.chart-label { font-size: 12px; font-weight: 600; fill: var(--ink); }
-.chart-value { font-size: 12px; fill: var(--ink); }
-.chart-grid line, .chart-grid-line { stroke: var(--rule); stroke-width: 1; }
-.chart-axis { stroke: var(--ink); stroke-width: 1; }
-.reg-line { fill: none; stroke: var(--ink); stroke-linejoin: miter; transition: opacity .15s; }
-.reg-line.dim { opacity: .25; }
-.zf-line { fill: none; stroke: var(--ink); stroke-width: 1.5; }
-.crosshair line { stroke: var(--ink); stroke-width: 1; }
-.cross-mark { fill: var(--ink); }
-.chart-hit { fill: transparent; cursor: crosshair; }
-.chart-slip { position: absolute; z-index: 5; padding: 4px 8px; white-space: nowrap; pointer-events: none; }
-.chart-legend { display: flex; gap: 18px; margin-bottom: 8px; }
-.legend-item { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: none;
-  font: 600 12px/1 var(--font-mono); color: var(--ink); cursor: default; }
-.legend-item svg line, .legend-item svg path { stroke: var(--ink); fill: none; }
-.legend-zf svg path { stroke-width: 1.5; }
-.mix-bar { stroke: var(--ink); stroke-width: 1; }
-
 .an-empty { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); padding: 18px 22px; text-align: center; }
 .an-empty p { margin: 0 0 10px; font: italic 400 16px/1.4 var(--font-serif); }
 
-/* Fig. 4 key */
-.mix-key { display: flex; gap: 16px; margin-top: 8px; font: 500 11.5px/1 var(--font-mono); color: var(--ink-2); }
-.mix-key span { display: inline-flex; align-items: center; gap: 6px; }
-.mix-key svg rect { stroke: var(--ink); stroke-width: 1; }
-
-/* Fig. 5 program profile */
-.an-fig5 { grid-column: 1 / -1; }
-.profile { position: relative; padding-left: var(--gutter); background: var(--paper-2); border: 1px solid var(--rule); }
+/* Fig. 3 program profile: as tall as Table 1 next to it; a longer listing scrolls inside.
+   (height 0 + flex-grow: the listing never makes the row taller than Table 1) */
+.an-prof { display: flex; flex-direction: column; }
+.prof-host { flex: 1 1 0; height: 0; min-height: 180px; display: flex; flex-direction: column; }
+.profile { flex: 1 1 auto; min-height: 0; overflow-y: auto; position: relative; padding-left: var(--gutter);
+  background: var(--paper-2); border: 1px solid var(--rule); }
 .prof-arcs { position: absolute; left: 0; top: 0; overflow: visible; }
-.prof-lines { margin: 0; padding: 0; list-style: none; border-left: 1px solid rgba(217, 72, 15, .4); }
+/* the listing is a notebook page: below the last line the ruled lines and the red margin
+   continue to the bottom of the box (same ruling as the editor, every 26px) */
+.prof-lines { margin: 0; padding: 0; list-style: none; min-height: 100%; box-sizing: border-box;
+  border-left: 1px solid rgba(217, 72, 15, .4);
+  background-image: repeating-linear-gradient(to bottom,
+    transparent 0 calc(var(--row) - 1px), var(--rule) calc(var(--row) - 1px) var(--row)); }
 .prof-line {
-  display: grid; grid-template-columns: 34px minmax(160px, 320px) minmax(0, 1fr); align-items: center;
+  display: grid; grid-template-columns: 34px minmax(0, 1fr) 110px; align-items: center;
   height: var(--row); border-bottom: 1px solid var(--rule); cursor: pointer; outline: none;
   font: 400 13px/1 var(--font-mono); color: var(--ink);
 }
@@ -69,12 +45,10 @@
 .prof-line.arc-hl { box-shadow: inset 0 -2px 0 var(--spot); }
 .prof-no { padding-right: 8px; text-align: right; color: var(--ink-3); font-size: 12px; }
 .prof-code { padding-left: 10px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
-.prof-heat { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
-.prof-heat i { display: block; height: 10px; max-width: 70%; background: var(--ink); }
-.prof-heat b { font-weight: 500; font-size: 12px; color: var(--ink-2); }
-.prof-line.hot .prof-heat i { background: var(--spot); }
-.prof-line.hot .prof-heat b { color: var(--spot-text); font-weight: 600; }
-.prof-heat em { font: italic 400 12px var(--font-serif); color: var(--spot-text); }
+.prof-count { padding-right: 12px; text-align: right; }
+.prof-count b { font-weight: 500; font-size: 12px; color: var(--ink-2); }
+.prof-line.hot .prof-count b { color: var(--spot-text); font-weight: 600; }
+.prof-count em { font: italic 400 12px var(--font-serif); color: var(--spot-text); }
 .prof-none { font-size: 11.5px; color: var(--ink-3); }
 .arc-path { fill: none; stroke: var(--ink); stroke-width: 1.5; }
 .arc-head { fill: var(--ink); }
@@ -82,7 +56,7 @@
 .arc { cursor: default; outline: none; }
 .arc.heavy .arc-path, .arc:focus-visible .arc-path { stroke-width: 3; }
 
-/* Table 2: full trace */
+/* Table 2: full trace, full width */
 .an-t2 { grid-column: 1 / -1; }
 .trace-filters { flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
 .tf-label { margin: 0 4px 0 14px; font: italic 400 13px var(--font-serif); color: var(--ink-2); }
@@ -107,5 +81,3 @@
 .trace-table[data-filter="reg"][data-reg="CX"] tbody tr[data-k]:not([data-chg~="CX"]),
 .trace-table[data-filter="reg"][data-reg="DX"] tbody tr[data-k]:not([data-chg~="DX"]) { display: none; }
 
-/* drawing the charts for print (A4 width) */
-body.printing .an-wrap { width: 700px; max-width: 700px; }

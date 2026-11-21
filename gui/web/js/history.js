@@ -4,7 +4,6 @@
 // "current" mark, so long programs stay smooth.
 
 import { describeStep, indexes, REG_NAMES } from "./state.js";
-import { compact } from "./charts.js";
 
 let rows = [];
 let currentRow = null;
@@ -45,6 +44,15 @@ export function initHistory(historyHooks) {
 export function renderHistory(s) {
   if (s.result !== builtFor) build(s);
   highlight(s.cursor);
+}
+
+// 2147483647 -> "2.1G": short numbers for the log when flag changes share the row.
+function compact(v) {
+  const a = Math.abs(v);
+  if (a >= 1e9) return (v / 1e9).toFixed(1) + "G";
+  if (a >= 1e6) return (v / 1e6).toFixed(1) + "M";
+  if (a >= 1e4) return Math.round(v / 1e3) + "k";
+  return String(v);
 }
 
 const escapeHtml = (t) => t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
