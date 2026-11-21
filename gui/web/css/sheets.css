@@ -42,7 +42,7 @@
 /* ---------------------------------------------------------------- help: appendix pages */
 .help-sheet {
   position: absolute; z-index: 30; top: calc(var(--header-h) + 14px); right: 24px;
-  bottom: calc(var(--trace-h) + 30px); width: 460px;
+  bottom: calc(var(--trace-h) + 64px); width: 460px;
   display: flex; flex-direction: column; padding: 0 18px 0;
   background: var(--paper); border: 1px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
 }
@@ -64,7 +64,8 @@
 .insert:hover { color: var(--ink); }
 
 /* ---------------------------------------------------------------- toasts: paper slips */
-.toast-host { position: absolute; z-index: 80; right: 24px; bottom: calc(var(--trace-h) + 28px); }
+.toast-host { position: absolute; z-index: 80; right: 24px; bottom: calc(var(--trace-h) + 50px); }
+.app:not([data-page="workbench"]) .toast-host { bottom: 44px; }
 .toast { display: flex; align-items: center; gap: 10px; max-width: 440px; padding: 8px 12px;
   font: 500 12px/1.4 var(--font-mono); animation: slip-in .18s ease-out; }
 .toast-red { border-left: 4px solid var(--spot); color: var(--spot-text); }

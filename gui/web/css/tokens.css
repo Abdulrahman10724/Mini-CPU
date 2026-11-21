@@ -45,7 +45,7 @@
 
   /* layout */
   --page-pad: 16px;
-  --header-h: 64px;
+  --header-h: 76px;
   --log-w: 300px;
   --trace-h: 240px;       /* resizable 180..400 (waveform.js) */
   --radius: 0;

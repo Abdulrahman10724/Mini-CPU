@@ -8,6 +8,7 @@ The GUI never checks or runs programs itself. run() only:
 Every method returns a plain dict/list and never raises to JavaScript.
 """
 
+import json
 import os
 import subprocess
 import sys
@@ -114,6 +115,26 @@ class Api:
             return {"ok": True, "path": path, "name": os.path.basename(path)}
         except Exception as e:
             return {"ok": False, "error": f"Could not save the file: {e}"}
+
+    # ------------------------------------------------------------------ last session
+    # pywebview runs in private mode (no lasting browser storage), so the last
+    # program is kept in runtime/session.json for the cover's "Continue" row.
+    def save_session(self, session):
+        try:
+            data = {k: session.get(k) for k in ("code", "fileName", "filePath")}
+            with open(os.path.join(RUNTIME_DIR, "session.json"), "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            return {"ok": True}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def load_session(self):
+        try:
+            with open(os.path.join(RUNTIME_DIR, "session.json"), "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return {"ok": bool(data.get("code", "").strip()), **data}
+        except (OSError, ValueError):
+            return {"ok": False}
 
     # ------------------------------------------------------------------ demos
     def list_demos(self):

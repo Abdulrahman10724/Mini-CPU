@@ -11,6 +11,9 @@
   <link rel="stylesheet" href="css/datapath.css">
   <link rel="stylesheet" href="css/waveform.css">
   <link rel="stylesheet" href="css/sheets.css">
+  <link rel="stylesheet" href="css/cover.css">
+  <link rel="stylesheet" href="css/analysis.css">
+  <link rel="stylesheet" href="css/print.css">
 </head>
 <body>
 
@@ -46,18 +49,27 @@
 
   <!-- ============================ MASTHEAD ============================ -->
   <header class="masthead">
-    <button class="title" id="logoBtn" aria-label="Mini-CPU home">
-      <span class="title-name">MINI-CPU</span>
-      <span class="title-sub">4-register educational processor · Datasheet Rev 1.0</span>
-      <span class="title-tag">BDS-3A-07</span>
-    </button>
+    <div class="title-block">
+      <button class="title" id="logoBtn" aria-label="Mini-CPU: go to the cover">
+        <span class="title-name">MINI-CPU</span>
+        <span class="title-sub">4-register educational processor · Datasheet Rev 1.0</span>
+        <span class="title-tag">BDS-3A-07</span>
+      </button>
+      <!-- section index, like a datasheet's table of contents -->
+      <nav class="sections" id="sectionIndex" aria-label="Sections">
+        <a href="#cover" data-sec="cover">§1 Cover</a>
+        <a href="#workbench" data-sec="workbench">§2 Workbench</a>
+        <a href="#analysis" data-sec="analysis" aria-disabled="true" data-tip="Run a program first">§3 Analysis</a>
+      </nav>
+    </div>
 
-    <div class="file" id="fileChip">
+    <div class="file wb-only" id="fileChip">
       <span class="file-name" id="fileName">untitled.txt</span><span class="dirty" id="dirtyDot"
         hidden aria-label="Unsaved changes">*</span>
     </div>
 
     <nav class="controls" aria-label="Controls">
+      <div class="wb-controls wb-only">
       <button class="btn-run" id="runBtn" data-tip="Run (Ctrl+Enter)">
         <svg class="icon icon-fill"><use href="#i-play"/></svg>RUN</button>
       <button class="ctl" id="stepBtn" data-tip="Step forward (F10)">STEP</button>
@@ -80,12 +92,21 @@
       </div>
       <button class="ctl" id="openBtn" data-tip="Open (Ctrl+O)">OPEN</button>
       <button class="ctl" id="saveBtn" data-tip="Save (Ctrl+S)">SAVE</button>
-      <button class="btn-outline" id="analysisBtn" hidden>ANALYSIS</button>
+      <button class="btn-outline" id="analysisBtn" disabled data-tip="Run a program first">ANALYSIS</button>
+      </div>
       <button class="ctl ctl-help" id="helpBtn" aria-label="Help" data-tip="Help (F1)">?</button>
       <button class="engine" id="engineBtn" aria-haspopup="dialog">
         <span class="engine-mark" aria-hidden="true"></span><span id="engineText">ENGINE …</span></button>
     </nav>
   </header>
+
+  <main class="pages" id="pages">
+
+  <!-- ============================ §1 COVER ============================ -->
+  <div class="page page-cover" id="pageCover" data-page="cover" hidden></div>
+
+  <!-- ============================ §2 WORKBENCH ============================ -->
+  <div class="page page-workbench" id="pageWorkbench" data-page="workbench" hidden>
 
   <!-- ============================ PROGRAM ============================ -->
   <section class="panel program" aria-label="Program">
@@ -162,6 +183,15 @@
     <div class="slip trace-tip" id="traceTip" hidden></div>
     <p class="caption caption-trace">Fig. 2 — Signal trace. Click or drag to move through time.</p>
   </section>
+
+  </div>
+
+  <!-- ============================ §3 ANALYSIS ============================ -->
+  <div class="page page-analysis" id="pageAnalysis" data-page="analysis" hidden></div>
+
+  </main>
+
+  <footer class="sheet-foot" id="sheetFoot">MINI-CPU DATASHEET · BDS-3A-07 · SHEET 1 OF 3</footer>
 
   <!-- ============================ OVERLAYS ============================ -->
   <aside class="help-sheet" id="helpDrawer" aria-label="Help" hidden></aside>
