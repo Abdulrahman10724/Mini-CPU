@@ -1,7 +1,8 @@
 # Mini CPU Simulator — COAL Lab Project
 
 University COAL (Computer Organization & Assembly Language) lab project, FAST Karachi.
-A virtual CPU with 4 registers (AX, BX, CX, DX), a program counter and a Zero Flag that
+A virtual CPU with 4 registers (AX, BX, CX, DX), a program counter and three flags
+(ZF, SF, CF; see `docs/flags_explained.md`) that
 parses and executes a small instruction set, with a live-coding Python GUI.
 
 ## Hard rules
