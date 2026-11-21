@@ -12,6 +12,7 @@ import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
 import { errorInfo } from "./errors.js";
 import { confirmDialog } from "./dialog.js";
 import { initRouter, go, currentPage, setAnalysisAvailable, PAGES } from "./router.js";
+import { initCover, renderCoverEngine, renderOrders, coverKeys } from "./cover.js";
 import { initHistory, renderHistory, markLineRows } from "./history.js";
 import { initWaveform, renderWaveform, setTraceLink, previewStep } from "./waveform.js";
 import { initHelp, renderHelp } from "./help.js";
@@ -231,19 +232,23 @@ async function confirmDiscard() {
   return !state.dirty || confirmDialog("This program has unsaved changes. Discard them?");
 }
 
-function loadProgram(code, fileName, filePath) {
+// mode "live": just check it; "run": run it animated (demos from the cover)
+function loadProgram(code, fileName, filePath, mode = "live") {
   cancelLiveRun();
   setCode(code);
   update({ code, fileName, filePath, dirty: false, result: null, resultCode: "", cursor: 0, playing: false,
     breakpoints: new Set() });
-  runCode(code, "live");
+  setAnalysisAvailable(false);
+  if (code.trim()) runCode(code, mode);
 }
 
+// Returns true when a file was opened.
 async function openFile() {
-  if (!(await confirmDiscard())) return;
+  if (!(await confirmDiscard())) return false;
   const res = await api.openFile();
-  if (res.ok) loadProgram(res.code.replace(/\r\n?/g, "\n"), res.name, res.path);
-  else if (!res.cancelled) toast(res.error, "red");
+  if (res.ok) { loadProgram(res.code.replace(/\r\n?/g, "\n"), res.name, res.path); return true; }
+  if (!res.cancelled) toast(res.error, "red");
+  return false;
 }
 
 async function saveFile() {
@@ -292,6 +297,24 @@ function onShowPage(page) {
     getEditor().refresh();                          // CodeMirror measures itself again
     window.dispatchEvent(new Event("resize"));
   }
+}
+
+// The cover's ordering table: every row opens §2 Workbench with a program.
+async function coverAction(a) {
+  if (a.act === "file") { if (await openFile()) go("workbench"); return; }
+  if (!(await confirmDiscard())) return;
+  if (a.act === "new") loadProgram("", "untitled.txt", null);
+  else if (a.act === "resume") loadProgram(lastSession.code, lastSession.fileName, lastSession.filePath);
+  else if (a.act === "drop") loadProgram(a.code.replace(/\r\n?/g, "\n"), a.name, null);
+  else if (a.act === "demo") {
+    const res = await api.loadDemo(a.id);
+    if (!res.ok) { toast(res.error, "red"); return; }
+    go("workbench");
+    loadProgram(res.code, a.id + ".txt", null, "run");      // demos run once, animated
+    return;
+  }
+  go("workbench");
+  getEditor().focus();
 }
 
 // The last program is remembered (gui/runtime/session.json) for the cover's Continue row.
@@ -438,6 +461,13 @@ async function boot() {
   initRouter({ onShow: onShowPage });
   const session = await api.loadSession();
   lastSession = session && session.ok ? session : null;
+  initCover({
+    onAction: coverAction,
+    onEngineHelp: () => { if (state.engine.state === "missing") $("engineBtn").click(); },
+    onDropError: (msg) => toast(msg, "red"),
+  }, lastSession);
+  pageKeys.cover = coverKeys;
+  subscribe(renderCoverEngine);
   update({ engine: await api.engineStatus() });
   buildDemosMenu();
 }
