@@ -1,4 +1,4 @@
-// help.js - the help sheet (F1 or the ? button), laid out like the appendix pages of a
+// help.js - the help sheet (F1), laid out like the appendix pages of a
 // datasheet: A instruction set, B error codes, C shortcuts.
 // The instruction text here is help text only; CPU.exe decides what is valid.
 
@@ -108,12 +108,15 @@ export function initHelp(hooks) {
 }
 
 let wasOpen = false;
+let opener = null;          // what had the focus before F1 opened the help
 
 export function renderHelp(s) {
   const drawer = document.getElementById("helpDrawer");
   drawer.hidden = !s.helpOpen;
-  document.getElementById("helpBtn").setAttribute("aria-expanded", String(s.helpOpen));
-  if (s.helpOpen && !wasOpen) document.getElementById("helpClose").focus();
-  if (!s.helpOpen && wasOpen && drawer.contains(document.activeElement)) document.getElementById("helpBtn").focus();
+  if (s.helpOpen && !wasOpen) {
+    opener = document.activeElement;
+    document.getElementById("helpClose").focus();
+  }
+  if (!s.helpOpen && wasOpen && drawer.contains(document.activeElement) && opener) opener.focus();
   wasOpen = s.helpOpen;
 }

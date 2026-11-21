@@ -18,6 +18,8 @@
   font: 600 12px/1 var(--font-mono); color: var(--ink); cursor: default;
 }
 .t-label[data-reg] { cursor: pointer; }
+/* the three flag rows are lower than the bus rows: smaller labels so they never touch */
+.t-label[data-row="ZF"], .t-label[data-row="SF"], .t-label[data-row="CF"] { font-size: 11px; }
 .t-label[data-reg]:hover, .t-label[data-reg]:focus-visible { text-decoration: underline; text-decoration-color: var(--spot);
   text-decoration-thickness: 2px; text-underline-offset: 3px; outline: none; }
 

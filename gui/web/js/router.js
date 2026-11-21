@@ -1,5 +1,5 @@
 // router.js - the three sections of the datasheet, one page each:
-//   #cover (§1)   #workbench (§2)   #analysis (§3)
+//   #cover   #workbench   #analysis   (Alt+1 / Alt+2 / Alt+3)
 // It is one single-page app: switching only shows another <div class="page">, so the
 // program, the result and the timeline position are kept.
 
@@ -7,7 +7,7 @@ export const PAGES = ["cover", "workbench", "analysis"];
 
 let current = null;
 let hooks = null;
-let analysisOpen = false;          // §3 is locked until a result exists
+let analysisOpen = false;          // Analysis is locked until a result exists
 
 export function initRouter(routerHooks) {
   hooks = routerHooks;
@@ -65,7 +65,7 @@ function show(page) {
   hooks.onShow(page, previous);
 }
 
-// §3 Analysis opens once a result exists.
+// The Analysis page opens once a result exists.
 export function setAnalysisAvailable(on) {
   analysisOpen = on;
   const link = document.querySelector('#sectionIndex a[data-sec="analysis"]');

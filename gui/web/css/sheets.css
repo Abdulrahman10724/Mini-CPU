@@ -84,9 +84,9 @@
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .btn-outline.danger { border-color: var(--spot); color: var(--spot-text); }
 
-/* ---------------------------------------------------------------- engine popover / missing slip */
-.popover h3, .engine-card h3 { margin: 0 0 6px; font: 600 14px/1.3 var(--font-ui); }
-.popover p, .popover li, .engine-card p, .engine-card li { margin: 0 0 8px; font: 400 12.5px/1.55 var(--font-ui); color: var(--ink-2); }
-.popover ol, .engine-card ol { margin: 0 0 12px; padding-left: 18px; }
-.popover code, .engine-card code { font: 500 12px var(--font-mono); color: var(--ink); }
+/* ---------------------------------------------------------------- "engine missing" slip */
+.engine-card h3 { margin: 0 0 6px; font: 600 14px/1.3 var(--font-ui); }
+.engine-card p, .engine-card li { margin: 0 0 8px; font: 400 12.5px/1.55 var(--font-ui); color: var(--ink-2); }
+.engine-card ol { margin: 0 0 12px; padding-left: 18px; }
+.engine-card code { font: 500 12px var(--font-mono); color: var(--ink); }
 .engine-card h3 { color: var(--spot-text); }

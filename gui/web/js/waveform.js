@@ -129,9 +129,11 @@ function measure() {
   const W = plot.clientWidth;
   const H = plot.clientHeight;
   const jmpH = 16;
-  // 5 bus rows + 3 flag rows (each about 0.6 of a bus row) + the JMP row
-  const busH = Math.max(14, Math.min(34, Math.floor((H - RULER_H - 6 - jmpH - 26) / 6.8)));
-  const zfH = Math.max(11, Math.min(20, Math.round(busH * 0.6)));
+  // 5 bus rows + 3 flag rows (each 0.7 of a bus row) + the JMP row, 2px apart:
+  // fixed part = ruler + 4 + JMP row + 9 gaps; the rest is shared by 5 + 3 x 0.7 = 7.1 rows
+  const fixed = RULER_H + 4 + jmpH + 9 * 2;
+  const busH = Math.max(10, Math.min(34, Math.floor((H - fixed) / 7.1)));
+  const zfH = Math.max(8, Math.min(22, Math.floor(busH * 0.7)));
   let y = RULER_H + 4;
   const rows = {};
   for (const r of ROWS) {
