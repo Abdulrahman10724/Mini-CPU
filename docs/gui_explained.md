@@ -1,5 +1,10 @@
 # The GUI: how it works (viva notes)
 
+The GUI looks like a page from a 1978 CPU datasheet: paper, black ink and one red. The program
+is a ruled notebook (errors are circled in red pen), Fig. 1 is the datapath as a textbook
+figure, and Fig. 2 is a timing diagram of the whole run. Colour is used only for moving data,
+the current step and errors.
+
 ## 1. How Python talks to CPU.exe
 
 ```
@@ -61,18 +66,57 @@ cancelled halfway, the screen ends up correct.
 
 Example: step 6 of the loop demo, `ADD AX, CX`, where AX goes from 5 to 9 and CX = 4.
 `choreography.js` returns a list of timed "beats". `animator.js` plays them with
-`requestAnimationFrame`. At 1× the whole step takes 1200 ms.
+`requestAnimationFrame`. At 1× the whole step takes 1200 ms. The figure works like print:
+an active wire is drawn heavy (3px ink instead of a thin grey rule), an active block is
+hatched, and **data travels as a small red label carrying the real value**.
 
 | Time | Phase | What you see |
 |---|---|---|
-| 0–25 % | FETCH | The PC block glows amber and its counter rolls to 03. A cyan pulse labelled `L3` travels PC → IMEM, and the IMEM window highlights line 03. |
-| 25–45 % | DECODE | A pulse travels IMEM → DECODER, and the decoder "types in" `op +`, `dst AX`, `src CX`. A purple pulse on the register-select line shows registers are needed. |
-| 45–62 % | EXECUTE | Two purple pulses run at the same time: AX's old value `5` into ALU input A, and CX's value `4` into input B. |
-| 60–74 % | EXECUTE | The ALU outline glows orange and shows `+`. |
-| 70–88 % | EXECUTE | An orange pulse carries the result `9` along the write-back trace to the register file. At the same time a green pulse carries `ZF 0` to the flags. |
-| 85–88 % | EXECUTE | The ZF LED is set (off, because 9 ≠ 0). AX's 7-segment digits change to 9, the AX row flashes purple → green, and a `+4` tag floats up. |
+| 0–25 % | FETCH | The FETCH tab is underlined in red, the PC block is hatched and its cells roll to 03, and a red `L3` label travels PC → IMEM. IMEM marks line 03 with ▶. |
+| 25–45 % | DECODE | A red `ADD` label travels IMEM → DECODER, and the decoder "types in" `op +`, `dst AX`, `src CX`. A label `AX` goes down the register-select wire. |
+| 45–62 % | EXECUTE | Two red labels travel at the same time: `5` (AX) into ALU input A and `4` (CX) into input B. They wait at the inputs. |
+| 60–72 % | EXECUTE | The ALU is hatched and shows `+`. The two inputs disappear and a single result label `9` appears inside the ALU. |
+| 72–90 % | EXECUTE | `9` travels down the write-back wire to the register file, and `ZF 0` travels to the flags. |
+| 86–100 % | EXECUTE | ZF stays a hollow ring (9 ≠ 0). In the ledger, AX's old value 5 moves to PREV and gets struck through, and 9 is written in NOW in red, then settles to black ink. |
 | 100 % | — | `showState(6)` draws the exact state from STEP line 6. |
 
-A pulse is a small circle (plus 3 fading copies as a tail) moved along the wire's SVG path
-with `path.getPointAtLength()`. While it moves, the wire is coloured, then fades back to
-grey. Every value shown on a pulse (`5`, `4`, `9`, `ZF 0`) comes from the STEP lines.
+## 5. The signal trace (Fig. 2)
+
+Real CPU datasheets show bus timing as a **timing diagram**, and Fig. 2 draws the whole run the
+same way. Each column is one step: column 0 is the start (everything 0), column k is the state
+after step k.
+
+- **PC, AX, BX, CX, DX** are "bus" rows. A value is drawn as a long hexagon, and where the value
+  changes the lines cross in an X. Students can see at a glance when a register changed and for
+  how long it kept its value.
+- **ZF** is a single wire, drawn as a square wave: high = 1, low = 0.
+- **JMP** shows ↶ at every step where a jump was taken.
+
+It is drawn on a `<canvas>`, because 500 steps × 7 rows would be thousands of SVG elements.
+The canvas only redraws when the result, the zoom, the scroll position or the size changes,
+and then only the columns you can see. The red cursor line, its `t = 6` flag and the red values
+for the current step are small HTML elements on top (an "overlay"), so moving through time
+never redraws the canvas. Click or drag to move the cursor, Ctrl + wheel to zoom, FIT to see
+everything. All values are read from the STEP lines of result.txt.
+
+## 6. Linked highlighting
+
+Hover over something and it lights up in every panel at once:
+
+| You hover… | It also highlights… |
+|---|---|
+| a register (`AX` in the editor, its ledger row, the `AX` trace label, `AX` in the log) | every AX in the editor (red underline), the AX ledger row (hatched), the AX trace row (light band), the wires that carry AX in this step (heavy), and log rows that changed AX (red rule) |
+| an editor line | its log rows, a red tick on the trace ruler at every step it ran, and its IMEM row |
+| a trace column or a log row (a step) | the line that ran (red band under it), the IMEM row, and a preview of that step's values, without moving the cursor (click to go there) |
+
+How it works: `highlight.js` holds **one** small value, for example `{ kind: "reg", value: "AX" }`,
+**separate from the main state**, so hovering never re-renders the page or re-runs CPU.exe.
+Every panel listens and shows the link in its own way. A hover link never looks like the current
+step (the current step is a solid red wash with ▶; links are underlines, bands, hatching or rules).
+For speed with 500 steps, `state.js` builds two lookup tables once per result, `byLine`
+(which steps ran line 3) and `byReg` (which steps changed AX), so a hover never scans the
+whole program.
+
+**Breakpoints** are GUI-only: click left of a line number to set ■. Run pauses on the first step
+that runs that line. CPU.exe is never told about breakpoints, because they only change *where
+the timeline stops*, not what the CPU computed.

@@ -26,7 +26,7 @@ mini-cpu/
   CLAUDE.md
   CONTRACT.md
   asm/CPU.asm        # whole simulator (may split into .inc files if large)
-  gui/app.py         # CustomTkinter GUI
+  gui/app.py         # GUI: pywebview window showing gui/web/ (HTML/CSS/JS)
   tests/             # test programs: <name>.txt and expected <name>.expected.txt
 ```
 
@@ -35,9 +35,17 @@ mini-cpu/
   the code and I will build it and paste back any errors.
 - Every test in `tests/` must produce output matching its `.expected.txt` exactly.
 
-## GUI (gui/app.py)
-- CustomTkinter. Left: code editor with line numbers. Right: AX, BX, CX, DX, ZF panel.
-- On Enter: save editor text to `program.txt`, run `CPU.exe` with `subprocess.run`
-  (same working directory), parse `result.txt`, show ✓ / ❌ + message next to each line.
-- Buttons: Run, Step (walks STEP lines from result.txt, no re-run), Reset, Open, Save.
-- Highlight the current line and any register that changed in the last step.
+## GUI (gui/ — see gui/README.md)
+- **pywebview** (the only dependency) opens a desktop window that shows `gui/web/index.html`
+  (vanilla HTML/CSS/JS, ES modules, no build step, fully offline: CodeMirror 5 and the
+  IBM Plex fonts are vendored with their licences).
+- Python (`gui/bridge.py`) only writes `program.txt`, runs `CPU.exe` in `gui/runtime/`
+  (`subprocess.run`, no console window), and parses `result.txt` (`gui/result_parser.py`).
+  The GUI contains NO CPU logic: every value it shows comes from result.txt.
+- `gui/mock_cpu.py` is DEV ONLY (`--mock`), for working without MASM; never a fallback.
+- Design: a "1978 CPU datasheet" page — paper, black ink, one spot red (`css/tokens.css`).
+  Program = ruled notebook with red-pen errors; Fig. 1 = datapath as a textbook figure;
+  execution log; Fig. 2 = signal trace (timing-diagram timeline). Hovering a register,
+  line or step highlights it in every panel.
+- Live mode: Enter (or 700 ms after typing stops) re-runs CPU.exe on the whole program.
+- Run / Step / Reset, play / pause, breakpoints (GUI only), Open / Save, demos, help.

@@ -223,8 +223,8 @@ function buildBlocks(layer) {
   // ---- U4 FLAGS: ZF as a printed circle (hollow ring = 0, solid disc = 1)
   const flags = block(layer, "flags");
   dp.zfDisc = el("circle", { cx: 110, cy: 494, r: 24, class: "zf-disc" }, flags);
-  dp.zfText = txt(flags, 110, 560, "ZF = 0", "zf-label", { "text-anchor": "middle" });
-  txt(flags, 110, 582, "(result = 0)", "zf-caption", { "text-anchor": "middle" });
+  dp.zfText = txt(flags, 110, 562, "ZF = 0", "zf-label", { "text-anchor": "middle" });
+  txt(flags, 110, 588, "(result = 0)", "zf-caption", { "text-anchor": "middle" });
 }
 
 function buildGate(layer) {
@@ -263,7 +263,7 @@ export function setRegister(i, now, prev = null, fresh = false) {
   r.prev.setAttribute("visibility", bin ? "hidden" : "visible");
   if (prev !== null && !bin) {
     const width = r.prev.getComputedTextLength();
-    const y = r.top + 31;
+    const y = r.top + 29;                          // through the middle of the digits
     r.strike.setAttribute("x1", LEDGER.colNow - 12 - width);
     r.strike.setAttribute("x2", LEDGER.colNow - 8);
     r.strike.setAttribute("y1", y);
@@ -303,7 +303,7 @@ export function setImem(centre, tone = "current") {
     row.line = exists ? n : null;
     row.num.textContent = exists ? String(n).padStart(2, "0") : "";
     const t = exists ? lines[n - 1].trim() : "";
-    row.text.textContent = t.length > 25 ? t.slice(0, 24) + "…" : t;
+    row.text.textContent = t.length > 22 ? t.slice(0, 21) + "…" : t;     // 22 chars fit at 16px
     const isCentre = Boolean(centre) && n === centre;
     row.mark.textContent = isCentre ? "▶" : "";
     row.g.dataset.current = String(isCentre);

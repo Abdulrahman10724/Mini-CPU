@@ -318,7 +318,7 @@ function onKeyDown(e) {
   else if (e.key === "F10" && e.shiftKey) stepBack();
   else if (e.key === "F10") stepForward();
   else if (ctrl && e.code === "Space") togglePlay();
-  else if (e.code === "Space" && !typing && !e.target.closest("button, [role=button], .h-row")) togglePlay();
+  else if (e.code === "Space" && !typing && !e.target.closest("button, [role=button], .log-row, .trace-plot")) togglePlay();
   else if (e.key === "Home" && !typing) { stopPlaying(); goTo(0); }
   else if (e.key === "End" && !typing) { stopPlaying(); goTo(totalSteps()); }
   else if (ctrl && e.key.toLowerCase() === "o") openFile();
