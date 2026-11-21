@@ -4,7 +4,7 @@
 // - idle demo:     replays the REAL trace of demo 03 (run once by CPU.exe through the
 //                  bridge); on each step the pins of that instruction are inked in
 // - hover a pin:   it is drawn heavy and a paper slip explains it
-// - click the body: "zoom into the die" and open §2 Workbench
+// - click the body: "zoom into the die" and open the Workbench
 // The pin names are a teaching picture of our datapath, not a real electrical chip.
 
 import { REG_NAMES, OPCODES, JUMP_OPS, words, jumpTaken } from "./state.js";

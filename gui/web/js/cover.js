@@ -1,19 +1,9 @@
-// cover.js - §1 COVER: the front page of the datasheet.
-//   left:  product title, FEATURES, ORDERING INFORMATION (= the main actions)
+// cover.js - COVER: the front page of the datasheet.
+//   left:  product title and ORDERING INFORMATION (= the main actions), centred
 //   right: Fig. 0 pin configuration (chip.js), and the engineering title block
 // The actions are done by main.js through `hooks`; this file only draws and listens.
 
 const $ = (id) => document.getElementById(id);
-
-const FEATURES = [
-  "Four 32-bit general-purpose registers: AX, BX, CX, DX",
-  "14-instruction set: MOV ADD SUB CMP INC DEC, JMP JZ JNZ JS JNS JC JNC, HLT",
-  "Zero, Sign and Carry flags (x86 rules) with 6 conditional jumps",
-  "Live syntax checking with 9 diagnostic codes",
-  "Programs loaded from and saved to text files",
-  "Step-by-step execution trace, up to 500 steps",
-  "Engine written in x86 MASM with the Irvine32 library",
-];
 
 // part number, description, action word, what it does
 const ORDERS = [
@@ -37,11 +27,6 @@ export function initCover(coverHooks, session) {
         <h1 class="cover-title">MINI-CPU</h1>
         <p class="cover-sub">4-Register Educational Microprocessor — Simulated in x86 Assembly</p>
         <div class="double-rule" aria-hidden="true"></div>
-
-        <section class="cover-sec" aria-labelledby="featTitle">
-          <h2 class="sec-title cover-head" id="featTitle">Features</h2>
-          <ul class="features">${FEATURES.map((f) => `<li>${f}</li>`).join("")}</ul>
-        </section>
 
         <section class="cover-sec ordering" id="ordering" aria-labelledby="ordTitle">
           <h2 class="sec-title cover-head" id="ordTitle">Ordering information</h2>
@@ -67,7 +52,6 @@ export function initCover(coverHooks, session) {
           <tr><th>CHECKED BY</th><td colspan="2">Abdullah Sheikh (Lab Instructor)</td></tr>
           <tr><th>COURSE</th><td colspan="2">EL-2003 COAL Lab · BDS-3A · Fall 2026</td></tr>
           <tr><th>INSTITUTION</th><td colspan="2">FAST NUCES Karachi</td></tr>
-          <tr><th>ENGINE</th><td colspan="2"><button class="tb-engine" id="tbEngine"></button></td></tr>
         </table>
       </div>
     </div>`;
@@ -82,7 +66,6 @@ export function initCover(coverHooks, session) {
     const row = e.target.closest("tr[data-i]");
     if (row && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); act(Number(row.dataset.i)); }
   });
-  $("tbEngine").addEventListener("click", () => hooks.onEngineHelp());
   initDrop(page);
 }
 
@@ -112,18 +95,6 @@ export function coverKeys(e) {
   const key = e.key.toLowerCase();
   const map = { n: 0, 1: 1, 2: 2, 3: 3, o: 4 };
   if (key in map) { e.preventDefault(); act(map[key]); }
-}
-
-// ------------------------------------------------------------------ engine row (live)
-export function renderCoverEngine(s, patch) {
-  if (!("engine" in patch)) return;
-  const btn = $("tbEngine");
-  if (!btn) return;
-  const text = { ready: "● CPU.exe found", missing: "○ CPU.exe not found (click for help)",
-    mock: "MOCK ENGINE (development only)", checking: "…" }[s.engine.state];
-  btn.textContent = text;
-  btn.dataset.state = s.engine.state;
-  btn.title = s.engine.path || "";
 }
 
 // ------------------------------------------------------------------ drag and drop a .txt file
