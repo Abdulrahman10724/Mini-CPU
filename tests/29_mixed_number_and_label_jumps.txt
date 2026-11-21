@@ -1,0 +1,9 @@
+jmp skip
+MOV AX, 99
+skip: MOV BX, 1
+twelve_chars:inc cx
+CMP CX, 3
+JNZ twelve_chars
+JZ 9
+MOV AX, 99
+  Done:   HLT

@@ -129,3 +129,33 @@ STEP 1 1 5 0 0 0 0
 STEP 2 2 5 3 0 0 0
 END ERRSTOP 3
 ```
+
+---
+
+## Appendix A — Labels (added later; everything above is unchanged)
+
+A line may start with a label `NAME:`. A jump may use the label instead of a line number:
+
+```
+MOV AX, 0
+MOV CX, 5
+L1: ADD AX, CX
+DEC CX
+JNZ L1
+HLT
+```
+
+- The label belongs to the line it is on. `JNZ L1` jumps to line 3, exactly like `JNZ 3`.
+  A label alone on a line (`L1:`) is an empty line.
+- Names: 1–12 characters, letters / digits / `_`, starting with a letter, case-insensitive,
+  not an instruction or register name. One label per line.
+- Labels can be used only with `JMP`, `JZ`, `JNZ`. Jumps still accept line numbers.
+- `result.txt` is unchanged: STEP and ERR lines always use **line numbers**, never labels.
+
+New error codes:
+
+| Code | Message |
+|---|---|
+| 10 | Undefined label |
+| 11 | Duplicate label (reported on the second definition) |
+| 12 | Invalid label name |

@@ -5,8 +5,13 @@
 ; program on four virtual registers (AX, BX, CX, DX) with a program
 ; counter and a Zero Flag, and writes result.txt (format: CONTRACT.md).
 ;
-; Phase 2: constants, full data section, reading program.txt and
-;          splitting it into uppercase lines (with DEBUG output).
+; It works like a small TWO-PASS ASSEMBLER:
+;   PASS 1 (CollectLabels): find every label "NAME:" and remember its line
+;          number in a symbol table, so a jump may use a label that is
+;          defined further down (a forward reference).
+;   PASS 2 (ParseAllLines): check every instruction; a jump to a label
+;          gets the line number from the symbol table (LookupLabel).
+; Then the program is executed and result.txt is written.
 ; =====================================================================
 
 ; Irvine32.inc already sets up the 32-bit flat memory model for us:
@@ -63,6 +68,14 @@ ERR_JUMP_RANGE    = 6 ; Jump target out of range
 ERR_TOO_MANY      = 7 ; Too many lines (max 50)
 ERR_FIRST_NOT_REG = 8 ; First operand must be a register
 ERR_NO_FILE       = 9 ; program.txt not found
+ERR_UNDEF_LABEL   = 10 ; Undefined label        (CONTRACT.md appendix A)
+ERR_DUP_LABEL     = 11 ; Duplicate label
+ERR_BAD_LABEL     = 12 ; Invalid label name
+
+; Labels (symbol table)
+MAX_LABELS   = 50     ; at most one label per line, so 50 is always enough
+LABEL_SLOT   = 16     ; bytes per name in labelNames (fixed slots, padded with 0)
+LABEL_MAXLEN = 12     ; longest allowed label name
 
 ; How execution ended (endType values, Phase 4)
 END_HALT    = 1       ; HLT executed               -> END HALT <steps>
@@ -105,6 +118,15 @@ instSrcType  BYTE  MAX_LINES DUP(0)        ; 0=none, 1=register, 2=number
 instSrc      SDWORD MAX_LINES DUP(0)       ; register index, number, or jump target line
 lineErr      BYTE  MAX_LINES+2 DUP(0)      ; error code per line, 0 = OK
                                            ; (index 50 = line 51, used for error 7)
+
+; ---------------------------------------------------------------------
+; Symbol table (PASS 1) - label names and the line each one is on
+; ---------------------------------------------------------------------
+labelNames   BYTE  MAX_LABELS*LABEL_SLOT DUP(0) ; label i is at offset i*LABEL_SLOT, 0-terminated
+labelLines   DWORD MAX_LABELS DUP(0)       ; line number of label i (parallel array)
+labelCount   DWORD 0                       ; labels stored so far
+labelWord    BYTE  LABEL_SLOT DUP(0)       ; work buffer: the label name found on the current line
+labelLen     DWORD 0                       ; its real length (only 15 chars fit in labelWord)
 
 ; ---------------------------------------------------------------------
 ; Name tables (Phase 3)
@@ -175,6 +197,8 @@ dbgCX        BYTE " CX=",0
 dbgDX        BYTE " DX=",0
 dbgZF        BYTE " ZF=",0
 dbgNoWrite   BYTE "ERROR: cannot create result.txt",0
+dbgLabels    BYTE "LABELS:",0
+dbgAtLine    BYTE " = LINE ",0
 
 .code
 
@@ -191,7 +215,8 @@ main PROC
     cmp  fileMissing, 1            ; could the file be read?
     je   SkipParse                 ; no -> nothing to split or parse
     call SplitLines                ; yes -> cut fileBuf into lines
-    call ParseAllLines             ; check every line, fill instruction arrays
+    call CollectLabels             ; PASS 1: labels -> symbol table, "NAME:" removed from lines
+    call ParseAllLines             ; PASS 2: check every line, fill instruction arrays
 SkipParse:
 
     call AppendStatusAndErrors     ; STATUS line + ERR lines (or the error-9 block)
@@ -206,6 +231,7 @@ SkipExecute:
 
     call DebugPrintLines           ; show what we read (only if DEBUG = 1)
     call DebugPrintParsed          ; show what the parser found (only if DEBUG = 1)
+    call DebugPrintLabels          ; show the symbol table (only if DEBUG = 1)
 
     exit                           ; Irvine32 macro for INVOKE ExitProcess, 0
 main ENDP
@@ -428,7 +454,298 @@ Done:
 DebugPrintLines ENDP
 
 ; =====================================================================
-; PHASE 3 - PARSER
+; PASS 1 - LABELS (the symbol table)
+; Before any instruction is checked, we read every line once and look
+; only at its FIRST word. If that word ends with ':' it is a label:
+;   - the name and its line number go into the symbol table
+;     (labelNames / labelLines, max 50 entries, 16-byte name slots)
+;   - "NAME:" is overwritten with spaces, so PASS 2 sees only the
+;     instruction ("L1: ADD AX, CX" -> "    ADD AX, CX"; "LOOP:" -> empty)
+; Because the whole table is ready before PASS 2 starts, a jump may use
+; a label defined further down (forward reference: JMP SKIP ... SKIP:).
+; Label errors go into lineErr: 11 duplicate, 12 invalid name.
+; =====================================================================
+
+; ---------------------------------------------------------------------
+; CollectLabels
+; Purpose:  PASS 1. Empty the symbol table, then collect the label of
+;           every line 1..lineCount.
+; Receives: lineCount, lineText
+; Returns:  nothing
+; Changes:  labelNames, labelLines, labelCount, lineText, lineErr
+; ---------------------------------------------------------------------
+CollectLabels PROC USES eax
+    mov  labelCount, 0             ; empty symbol table
+    mov  eax, 1                    ; EAX = line number
+LineLoop:
+    cmp  eax, lineCount            ; done all lines?
+    ja   Done
+    call CollectLineLabel          ; (keeps EAX unchanged)
+    inc  eax
+    jmp  LineLoop
+Done:
+    ret
+CollectLabels ENDP
+
+; ---------------------------------------------------------------------
+; CollectLineLabel
+; Purpose:  Look for a label at the start of one line. If its first word
+;           ends with ':', copy the name to labelWord, erase "NAME:" from
+;           the line, check the name and add it to the symbol table.
+;           Checks, left to right (first error wins):
+;             invalid name -> 12, already defined -> 11 (the FIRST
+;             definition stays valid), a second label on the line -> 12.
+; Receives: EAX = line number (1-based)
+; Returns:  nothing
+; Changes:  the line in lineText, lineErr for this line, symbol table
+; Register use inside: EBX = line number, EDX = start of the first word,
+;                      EDI = scan pointer (then: address of the ':'),
+;                      ECX = rest of the line after the ':'
+; ---------------------------------------------------------------------
+CollectLineLabel PROC USES eax ebx ecx edx esi edi
+    mov  ebx, eax                  ; EBX = line number (kept for the whole PROC)
+    mov  lineErr[ebx-1], 0         ; no error on this line yet
+    call GetLineAddress            ; ESI = start of the line
+    mov  edi, esi                  ; EDI = scan pointer
+
+SkipSpaces:                        ; a label may have spaces in front of it
+    cmp  BYTE PTR [edi], ' '
+    jne  FirstWord
+    inc  edi
+    jmp  SkipSpaces
+
+FirstWord:
+    mov  edx, edi                  ; EDX = start of the first word
+WordLoop:                          ; walk to the end of the first word
+    mov  al, [edi]
+    cmp  al, ':'                   ; ':' -> the first word is a label
+    je   FoundLabel
+    cmp  al, 0                     ; end of line, space or comma before any ':'
+    je   Done                      ;   -> no label on this line
+    cmp  al, ' '
+    je   Done
+    cmp  al, ','
+    je   Done
+    inc  edi
+    jmp  WordLoop
+
+FoundLabel:                        ; EDX = start of the name, EDI = address of ':'
+    ; ---- 1. copy the name into labelWord (at most 15 chars fit) ----
+    mov  ecx, edi
+    sub  ecx, edx                  ; ECX = length of the name
+    mov  labelLen, ecx             ; (the real length, used by IsValidLabelName)
+    mov  esi, edx                  ; ESI = read pointer in the name
+    mov  ecx, 0                    ; ECX = chars copied
+CopyLoop:
+    cmp  esi, edi                  ; reached the ':'?
+    jae  CopyDone
+    cmp  ecx, LABEL_SLOT-1         ; labelWord full? (a name that long is invalid anyway)
+    jae  CopyDone
+    mov  al, [esi]
+    mov  labelWord[ecx], al
+    inc  esi
+    inc  ecx
+    jmp  CopyLoop
+CopyDone:
+    mov  labelWord[ecx], 0         ; terminate the name
+
+    ; ---- 2. erase "NAME:" from the line (spaces), so PASS 2 skips it ----
+    mov  esi, edx
+EraseLoop:
+    cmp  esi, edi                  ; erased the ':' too?
+    ja   EraseDone
+    mov  BYTE PTR [esi], ' '
+    inc  esi
+    jmp  EraseLoop
+EraseDone:
+    mov  ecx, esi                  ; ECX = rest of the line (after the ':')
+
+    ; ---- 3. check the name and store it ----
+    mov  esi, OFFSET labelWord
+    call IsValidLabelName          ; EAX = 1 if the name is allowed
+    cmp  eax, 1
+    jne  BadLabel
+    call LookupLabel               ; Carry = 0 -> this name is already in the table
+    jnc  Duplicate
+    call AddLabel                  ; new name -> symbol table (ESI = name, EBX = line)
+
+    ; ---- 4. only one label per line: any other ':' -> error 12 ----
+    mov  esi, ecx
+SecondLoop:
+    mov  al, [esi]
+    cmp  al, 0                     ; end of line -> fine
+    je   Done
+    cmp  al, ':'                   ; "X: Y: MOV BX, 2"
+    je   BadLabel
+    inc  esi
+    jmp  SecondLoop
+
+BadLabel:
+    mov  lineErr[ebx-1], ERR_BAD_LABEL
+    jmp  Done
+Duplicate:
+    mov  lineErr[ebx-1], ERR_DUP_LABEL
+Done:
+    ret
+CollectLineLabel ENDP
+
+; ---------------------------------------------------------------------
+; IsValidLabelName
+; Purpose:  Check a label name: 1..12 chars, only letters, digits and
+;           '_', starts with a letter, and not an opcode or register
+;           name (so "MOV:" and "CX:" are invalid). The line is already
+;           uppercase, so names are case-insensitive.
+; Receives: ESI = address of the name (labelWord), labelLen = its length
+; Returns:  EAX = 1 if valid, 0 if not
+; Changes:  nothing else
+; Register use inside: EDX = pointer to the current char
+; ---------------------------------------------------------------------
+IsValidLabelName PROC USES edx
+    cmp  labelLen, 0               ; ":" with no name
+    je   Invalid
+    cmp  labelLen, LABEL_MAXLEN    ; longer than 12 chars
+    ja   Invalid
+
+    mov  al, [esi]                 ; first char must be a letter A..Z
+    cmp  al, 'A'
+    jb   Invalid
+    cmp  al, 'Z'
+    ja   Invalid
+
+    mov  edx, esi                  ; check every char
+CharLoop:
+    mov  al, [edx]
+    cmp  al, 0                     ; end of the name -> all chars OK
+    je   CharsOK
+    cmp  al, 'A'                   ; letter?
+    jb   NotLetter
+    cmp  al, 'Z'
+    jbe  NextChar
+NotLetter:
+    cmp  al, '0'                   ; digit?
+    jb   Invalid
+    cmp  al, '9'
+    jbe  NextChar
+    cmp  al, '_'                   ; underscore?
+    je   NextChar
+    jmp  Invalid                   ; anything else ('-', '.', ...)
+NextChar:
+    inc  edx
+    jmp  CharLoop
+
+CharsOK:
+    call LookupOpcode              ; EAX = opcode number, 0 if not an opcode
+    cmp  eax, 0
+    jne  Invalid
+    call LookupRegister            ; EAX = register index, -1 if not a register
+    cmp  eax, -1
+    jne  Invalid
+    mov  eax, 1                    ; valid
+    jmp  Done
+Invalid:
+    mov  eax, 0
+Done:
+    ret
+IsValidLabelName ENDP
+
+; ---------------------------------------------------------------------
+; LookupLabel
+; Purpose:  Find a name in the symbol table (16-byte slots).
+;           Used in PASS 1 (duplicate check) and PASS 2 (jump targets).
+; Receives: ESI = address of the name
+; Returns:  Carry = 0: EAX = line number of that label
+;           Carry = 1: EAX = 0, the label is not defined
+; Changes:  nothing else
+; ---------------------------------------------------------------------
+LookupLabel PROC USES ecx edi
+    mov  ecx, 0                    ; ECX = entry index
+    mov  edi, OFFSET labelNames    ; EDI = address of entry ECX
+SearchLoop:
+    cmp  ecx, labelCount           ; checked all entries?
+    jae  NotFound
+    call StrEquals                 ; EAX = 1 if the names are equal
+    cmp  eax, 1
+    je   Found
+    add  edi, LABEL_SLOT           ; next name is 16 bytes further
+    inc  ecx
+    jmp  SearchLoop
+Found:
+    mov  eax, labelLines[ecx*4]    ; its line number
+    clc
+    jmp  Done
+NotFound:
+    mov  eax, 0
+    stc
+Done:
+    ret                            ; (the POPs from USES do not change the Carry flag)
+LookupLabel ENDP
+
+; ---------------------------------------------------------------------
+; AddLabel
+; Purpose:  Append one name + line number to the symbol table.
+; Receives: ESI = address of the name (max 12 chars), EBX = line number
+; Returns:  nothing
+; Changes:  labelNames, labelLines, labelCount
+; ---------------------------------------------------------------------
+AddLabel PROC USES eax edx esi edi
+    mov  eax, labelCount
+    cmp  eax, MAX_LABELS           ; table full? (cannot happen: one label per line)
+    jae  Done
+    mov  edx, LABEL_SLOT
+    mul  edx                       ; EAX = labelCount * 16 (MUL also changes EDX)
+    mov  edi, OFFSET labelNames
+    add  edi, eax                  ; EDI = the free slot
+CopyLoop:                          ; copy the name, including its 0
+    mov  al, [esi]
+    mov  [edi], al
+    cmp  al, 0
+    je   Copied
+    inc  esi
+    inc  edi
+    jmp  CopyLoop
+Copied:
+    mov  eax, labelCount
+    mov  labelLines[eax*4], ebx    ; the line this label is on
+    inc  labelCount
+Done:
+    ret
+AddLabel ENDP
+
+; ---------------------------------------------------------------------
+; DebugPrintLabels
+; Purpose:  When DEBUG = 1, print the symbol table: "NAME = LINE n".
+; Receives: labelNames, labelLines, labelCount
+; Returns:  nothing
+; Changes:  nothing (console output only)
+; ---------------------------------------------------------------------
+DebugPrintLabels PROC USES eax ecx edx esi
+    mov  eax, DEBUG
+    cmp  eax, 0                    ; debug output switched off?
+    je   Done
+    mov  edx, OFFSET dbgLabels     ; "LABELS:"
+    call WriteString
+    call Crlf
+    mov  ecx, 0                    ; ECX = entry index
+    mov  esi, OFFSET labelNames    ; ESI = address of entry ECX
+PrintLoop:
+    cmp  ecx, labelCount
+    jae  Done
+    mov  edx, esi                  ; the name
+    call WriteString
+    mov  edx, OFFSET dbgAtLine     ; " = LINE "
+    call WriteString
+    mov  eax, labelLines[ecx*4]
+    call WriteDec
+    call Crlf
+    add  esi, LABEL_SLOT
+    inc  ecx
+    jmp  PrintLoop
+Done:
+    ret
+DebugPrintLabels ENDP
+
+; =====================================================================
+; PHASE 3 - PARSER (PASS 2 of the assembler)
 ; Convention used by the Parse... helpers:
 ;   Carry flag = 0 -> success, result in EAX
 ;   Carry flag = 1 -> failure, EAX = error code (CONTRACT.md)
@@ -765,13 +1082,29 @@ ParseSrcOperand ENDP
 
 ; ---------------------------------------------------------------------
 ; ParseJumpTarget
-; Purpose:  Check the operand of JMP/JZ/JNZ: a number from 1 to lineCount.
-; Receives: ESI = address of the operand word, lineCount
+; Purpose:  Check the operand of JMP/JZ/JNZ. It is either
+;           - a line number (starts with a digit, '-' or '+'): must be a
+;             valid number from 1 to lineCount, or
+;           - a label name: looked up in the symbol table from PASS 1.
+; Receives: ESI = address of the operand word, lineCount, symbol table
 ; Returns:  Carry = 0: EAX = target line number
-;           Carry = 1: EAX = error code (5 not a number, 6 out of range)
+;           Carry = 1: EAX = error code (5 bad number, 6 out of range,
+;                      10 undefined label)
 ; Changes:  nothing else
 ; ---------------------------------------------------------------------
 ParseJumpTarget PROC
+    call IsNumberStart             ; "7", "-1", "+5" -> treat it as a line number
+    cmp  eax, 1
+    je   LineNumber
+    call LookupLabel               ; anything else is a label: EAX = its line
+    jc   Undefined                 ; not in the symbol table
+    clc                            ; (a label's line is always in range)
+    ret
+Undefined:
+    mov  eax, ERR_UNDEF_LABEL
+    stc
+    ret
+LineNumber:
     call StrToInt                  ; EAX = value, Carry = 1 if not a number
     jc   BadNumber
     cmp  eax, 1                    ; below line 1? (signed compare, value may be negative)
@@ -795,7 +1128,9 @@ ParseJumpTarget ENDP
 ; Purpose:  Parse one line. On success fill instOp/instDst/instSrcType/
 ;           instSrc for that line; on failure store the FIRST error found
 ;           in lineErr. Check order: opcode (1) -> missing operand (3) ->
-;           operand 1 (8/2, or 5/6 for jumps) -> operand 2 (5/2) -> extra (4).
+;           operand 1 (8/2, or 5/6/10 for jumps) -> operand 2 (5/2) -> extra (4).
+;           PASS 1 already removed any label from the line. If PASS 1 found
+;           a label error on this line (11/12), the line is not parsed.
 ; Receives: EAX = line number (1-based), lineText
 ; Returns:  nothing
 ; Changes:  instOp, instDst, instSrcType, instSrc, lineErr (for this line),
@@ -812,7 +1147,8 @@ ParseLine PROC USES eax ebx ecx edx esi edi
     mov  instDst[ebx], 0
     mov  instSrcType[ebx], SRC_NONE
     mov  instSrc[ebx*4], 0         ; instSrc is SDWORD, so index * 4
-    mov  lineErr[ebx], 0
+    cmp  lineErr[ebx], 0           ; label error from PASS 1? keep it, one error per line
+    jne  Done
 
     call GetLineAddress            ; ESI = address of this line (EAX = line number)
     call Tokenize                  ; split it into words
@@ -842,7 +1178,7 @@ CountOK:
 
     cmp  ecx, OP_HLT               ; HLT has no operands to check
     je   CheckExtra
-    cmp  ecx, OP_JMP               ; JMP, JZ, JNZ (7..9) take a line number
+    cmp  ecx, OP_JMP               ; JMP, JZ, JNZ (7..9) take a line number or a label
     jae  JumpOperand
 
     ; ---- 3. operand 1 must be a register (MOV ADD SUB CMP INC DEC) ----
@@ -863,7 +1199,7 @@ CountOK:
     mov  instSrc[ebx*4], eax
     jmp  CheckExtra
 
-JumpOperand:                       ; ---- 3. operand 1 of a jump: target line ----
+JumpOperand:                       ; ---- 3. operand 1 of a jump: line number or label ----
     mov  eax, 1
     call GetTokenAddress           ; ESI = word 1
     call ParseJumpTarget           ; EAX = target line or error code
