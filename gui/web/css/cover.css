@@ -1,0 +1,70 @@
+/* cover.css - §1 COVER, the datasheet's front page. */
+
+.page-cover { overflow-y: auto; }
+.cover-grid {
+  height: 100%; min-height: 690px;          /* fits 1440x900; scrolls a little below that */
+  display: grid; grid-template-columns: 45% minmax(0, 1fr); column-gap: 48px;
+  padding: 22px 0 14px;
+}
+
+/* ---------------------------------------------------------------- left: title, features, ordering */
+.cover-left { display: flex; flex-direction: column; min-width: 0; }
+.advance { margin: 0 0 10px; font: 500 11px/1 var(--font-mono); letter-spacing: .1em; color: var(--ink-2); }
+.cover-title {
+  margin: 0; font: 600 72px/0.95 var(--font-ui); letter-spacing: -0.02em; color: var(--ink);
+}
+.cover-sub { margin: 10px 0 14px; font: italic 400 20px/1.3 var(--font-serif); color: var(--ink-2); }
+.double-rule { height: 4px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
+
+.cover-sec { margin-top: 18px; }
+.cover-head { padding-top: 8px; border-top: 1px solid var(--ink); margin-bottom: 8px; }
+.features { margin: 0; padding: 0; list-style: none; }
+.features li {
+  position: relative; padding: 3px 0 3px 18px;
+  font: 400 15px/1.45 var(--font-ui); color: var(--ink);
+}
+.features li::before { content: "■"; position: absolute; left: 0; top: 5px; font-size: 9px; color: var(--ink); }
+
+/* ordering information: a ruled table, each row is an action */
+.ordering { position: relative; }
+.order-table { width: 100%; border-collapse: collapse; }
+.order-table th {
+  text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--ink);
+  font: 600 10px/1 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+}
+.order-table td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.order-table tbody tr { cursor: pointer; outline: none; }
+.order-table tbody tr:hover, .order-table tbody tr:focus-visible { background: var(--paper-3); }
+.order-table tbody tr:focus-visible { box-shadow: inset 2px 0 0 var(--spot); }
+.order-table .part { width: 104px; padding-left: 6px; font: 600 12.5px/1 var(--font-mono); color: var(--ink); }
+.order-table tr:hover .part, .order-table tr:focus-visible .part { color: var(--spot-text); }
+.order-table .desc { font: 400 14px/1.35 var(--font-ui); color: var(--ink); }
+.order-table .go { width: 92px; text-align: right; white-space: nowrap;
+  font: 600 11.5px/1 var(--font-ui); letter-spacing: .08em; color: var(--ink); }
+.order-table .arrow { display: inline-block; transition: transform .15s; }
+.order-table tr:hover .arrow, .order-table tr:focus-visible .arrow { transform: translateX(4px); }
+.drop-hint { margin: 8px 0 0; font: italic 400 13px/1.4 var(--font-serif); color: var(--ink-2); }
+/* a file dragged over the page: dashed spot border around the table */
+.ordering.dragging::after {
+  content: ""; position: absolute; inset: 30px -8px -6px; border: 2px dashed var(--spot); pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- right: figure + title block */
+.cover-right { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.chip-fig { flex: 1 1 0; min-height: 0; margin: 0; display: flex; flex-direction: column; }
+#chip { flex: 1 1 0; min-height: 0; height: 0; width: 100%; overflow: visible; }   /* takes what is left */
+.chip-readout { margin: 2px 0 0; height: 18px; text-align: center; font: 500 12px/18px var(--font-mono); color: var(--ink-2); }
+
+/* the engineering title block, bottom right, like on a technical drawing */
+.drawing-block {
+  align-self: flex-end; width: min(100%, 560px); margin-top: 12px;
+  border-collapse: collapse; border: 1.5px solid var(--ink);
+  font: 400 11.5px/1.45 var(--font-mono); color: var(--ink);
+}
+.drawing-block th, .drawing-block td { border: 1px solid var(--ink); padding: 4px 8px; text-align: left; vertical-align: top; }
+.drawing-block th { width: 104px; font-weight: 500; font-size: 10.5px; letter-spacing: .06em; color: var(--ink-3); }
+.drawing-block .tb-title { font-weight: 600; font-size: 13px; letter-spacing: .04em; }
+.drawing-block .tb-side { width: 84px; white-space: nowrap; }
+.tb-engine { padding: 0; border: 0; background: none; cursor: default; font: inherit; color: var(--ink); text-align: left; }
+.tb-engine[data-state="missing"] { color: var(--spot-text); cursor: pointer; text-decoration: underline; }
+.tb-engine[data-state="mock"] { color: var(--spot-text); }
