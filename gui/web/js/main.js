@@ -168,7 +168,7 @@ function renderTopBar(s, patch) {
     const btn = $("engineBtn");
     btn.dataset.state = s.engine.state;
     $("engineText").textContent = {
-      ready: "Engine ready", missing: "Engine not found", mock: "MOCK ENGINE", checking: "Checking engine…",
+      ready: "ENGINE OK", missing: "ENGINE MISSING", mock: "MOCK ENGINE", checking: "ENGINE …",
     }[s.engine.state];
     btn.title = s.engine.path || "";
   }
@@ -310,6 +310,13 @@ async function retryEngine() {
 
 // ------------------------------------------------------------------ boot
 async function boot() {
+  // crop marks on the corners of every panel (print production marks)
+  for (const panel of document.querySelectorAll(".panel")) {
+    const crop = document.createElement("i");
+    crop.className = "crop";
+    crop.setAttribute("aria-hidden", "true");
+    panel.append(crop);
+  }
   subscribe(renderTopBar);
   subscribe(renderEditor);
   buildDatapath($("datapath"), { onFormatChange: (f) => update({ regFormat: f }) });

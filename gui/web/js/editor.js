@@ -123,24 +123,21 @@ function programLineCount(code) {
   return code.replace(/\n$/, "").split("\n").length;
 }
 
+// "7 LINES · 0 ERRORS · 7/50" (the errors part in red when there are any)
 function renderHeader(s) {
   const count = programLineCount(s.code);
-  const counter = document.getElementById("lineCount");
-  counter.textContent = `${count} / 50`;
-  counter.classList.toggle("warn", count >= 45 && count < 50);
-  counter.classList.toggle("full", count >= 50);
-
-  const chip = document.getElementById("parseChip");
-  if (!s.result) { chip.hidden = true; return; }
-  chip.hidden = false;
-  const n = s.result.errors.length;
-  if (n === 0) {
-    chip.className = "chip chip-ok";
-    chip.textContent = `✓ ${count} ${count === 1 ? "line" : "lines"} · no errors`;
-  } else {
-    chip.className = "chip chip-err";
-    chip.textContent = `${n} ${n === 1 ? "error" : "errors"}`;
-  }
+  const errors = s.result ? s.result.errors.length : 0;
+  const el = document.getElementById("programStatus");
+  el.innerHTML = "";
+  const part = (text, bad) => {
+    const span = document.createElement("span");
+    span.textContent = text;
+    if (bad) span.className = "bad";
+    el.append(span);
+  };
+  part(`${count} ${count === 1 ? "LINE" : "LINES"} · `);
+  part(`${errors} ${errors === 1 ? "ERROR" : "ERRORS"}`, errors > 0);
+  part(` · ${count}/50`, count >= 50);
 }
 
 function clearDecorations() {
