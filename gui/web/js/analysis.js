@@ -1,9 +1,10 @@
-// analysis.js - §3 ANALYSIS: the "characterization report" of the last run.
+// analysis.js - ANALYSIS: the "characterization report" of the last run.
+//   Table 1 (summary) | Fig. 3 (program profile)
+//   Table 2 (full trace)
 // All numbers come from api.analysis() (gui/analysis_stats.py), i.e. they are
-// counts of what result.txt says. This file only lays them out and draws them.
+// counts of what result.txt says. This file only lays them out.
 
 import { api } from "./api.js";
-import { registerChart, mixBars } from "./charts.js";
 import { programProfile } from "./profile.js";
 
 const $ = (id) => document.getElementById(id);
@@ -14,15 +15,14 @@ let stats = null;
 
 export function initAnalysis(analysisHooks) {
   hooks = analysisHooks;
-  window.addEventListener("resize", () => { if (stats && hooks.isVisible()) drawCharts(); });
 }
 
-// Called when §3 is shown (and when the result changes while it is shown).
+// Called when the Analysis page is shown (and when the result changes while it is shown).
 export async function renderAnalysis(s) {
   const page = $("pageAnalysis");
   if (!s.result) {
     renderedFor = null;
-    page.innerHTML = `<div class="slip an-empty"><p>No characterization data. Run a program in §2 Workbench first.</p>
+    page.innerHTML = `<div class="slip an-empty"><p>No characterization data. Run a program in the Workbench first.</p>
       <button class="ctl" id="anGoWb">GO TO WORKBENCH →</button></div>`;
     $("anGoWb").addEventListener("click", () => hooks.goWorkbench());
     return;
@@ -66,29 +66,14 @@ function build(s, res) {
             <tbody>${summaryRows(st)}</tbody>
           </table>
         </section>
-        <figure class="an-block an-fig4">
-          <div class="chart-host" id="fig4"></div>
-          <div class="mix-key" aria-hidden="true">
-            <span><svg width="22" height="12"><rect width="22" height="12" fill="url(#hatchLight)"/></svg>data</span>
-            <span><svg width="22" height="12"><rect width="22" height="12" fill="url(#hatchDense)"/></svg>arithmetic</span>
-            <span><svg width="22" height="12"><rect width="22" height="12" fill="url(#hatchCross)"/></svg>compare</span>
-            <span><svg width="22" height="12"><rect width="22" height="12" style="fill: var(--ink)"/></svg>control</span>
-          </div>
-          <figcaption class="caption">Fig. 4 — Instruction mix: how many steps ran each instruction.</figcaption>
-        </figure>
-        <figure class="an-block an-fig3">
-          <div class="chart-host" id="fig3"></div>
-          <figcaption class="caption">Fig. 3 — Register values per step (AX solid, BX dashed, CX dotted,
-            DX dash-dot) with the Zero Flag below. Hover to read a step; click to open it in §2.</figcaption>
-        </figure>
-        <figure class="an-block an-fig5">
-          <div id="fig5"></div>
-          <figcaption class="caption">Fig. 5 — Program profile. Bars: how often each line ran.
-            Arrows: jumps that were taken, with their count. Click a line to open its last run in §2.</figcaption>
+        <figure class="an-block an-prof">
+          <p class="tcaption">Fig. 3 — Program profile: how often each line ran (×N), and arrows for the
+            jumps that were taken, with their count. Click a line to open its last run in the Workbench.</p>
+          <div class="prof-host" id="fig3"></div>
         </figure>
         <section class="an-block an-t2">
           <p class="tcaption">Table 2 — Full trace: the registers and flags after every step.
-            Values that changed in that step are marked. Click a row to open that step in §2.</p>
+            Values that changed in that step are marked. Click a row to open that step in the Workbench.</p>
           <div class="tabs trace-filters" id="traceFilters" role="radiogroup" aria-label="Filter the trace">
             <button role="radio" data-f="all" aria-checked="true">All</button>
             <span class="tf-label">Changes to</span>
@@ -107,7 +92,7 @@ function build(s, res) {
   $("anExport").addEventListener("click", hooks.exportTrace);
   $("anPrint").addEventListener("click", () => window.print());
   wireTraceTable();
-  drawCharts();
+  programProfile($("fig3"), stats, (line) => hooks.openLine(line));
 }
 
 function row(param, value, note = "", red = false) {
@@ -182,21 +167,4 @@ function wireTraceTable() {
 
 function clearLineFilter(table) {
   for (const tr of table.querySelectorAll("tr.off")) tr.classList.remove("off");
-}
-
-// Before printing, draw the charts at A4 width; afterwards at screen width again.
-window.addEventListener("beforeprint", () => { document.body.classList.add("printing"); if (stats) drawCharts(); });
-window.addEventListener("afterprint", () => { document.body.classList.remove("printing"); if (stats) drawCharts(); });
-
-function drawCharts() {
-  mixBars($("fig4"), stats);
-  programProfile($("fig5"), stats, (line) => hooks.openLine(line));
-  registerChart($("fig3"), stats, {
-    describe: (k) => {
-      const v = (r) => stats.values[r][k];
-      const where = k === 0 ? "start" : `L${hooks.lineOfStep(k)} ${hooks.textOfStep(k).replace(/,\s*/g, ",")}`;
-      return `t=${k} · ${where} · AX ${v("AX")} · BX ${v("BX")} · CX ${v("CX")} · DX ${v("DX")} · ZF ${stats.zf[k]} SF ${stats.sf[k]} CF ${stats.cf[k]}`;
-    },
-    onPick: (k) => hooks.openAt(k),
-  });
 }

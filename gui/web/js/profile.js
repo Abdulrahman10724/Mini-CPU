@@ -1,7 +1,7 @@
-// profile.js - Fig. 5, the program profile: the listing (read-only, ruled like the
+// profile.js - Fig. 3, the program profile: the listing (read-only, ruled like the
 // notebook) with
-//   - a HEAT margin on the right: an ink bar as long as the number of times the line
-//     ran ("×5"); the hottest line gets a red bar and a "hot" note
+//   - a COUNT on the right: how many times the line ran ("×5"); the most-run line
+//     is marked "hot" in red
 //   - BRANCH ARCS on the left: a curved arrow from every jump that was taken to its
 //     target line, with how often it was taken ("4×"). Loops become visible.
 // The counts and arcs come from analysis_stats.py (counted from result.txt).
@@ -23,7 +23,6 @@ const esc = (t) => String(t).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt
 export function programProfile(host, stats, onLine) {
   const lines = stats.listing;
   const counts = stats.line_counts;
-  const max = Math.max(1, ...Object.values(counts));
   const hot = stats.hottest ? stats.hottest.line : null;
 
   host.innerHTML = `
@@ -34,7 +33,7 @@ export function programProfile(host, stats, onLine) {
         const isHot = n === hot && c > 1;
         return `<li class="prof-line${isHot ? " hot" : ""}" data-line="${n}" tabindex="0">
           <span class="prof-no">${n}</span><span class="prof-code">${esc(text) || "&nbsp;"}</span>
-          <span class="prof-heat">${c ? `<i style="width:${Math.max(3, (c / max) * 100)}%"></i><b>×${c}</b>${isHot ? "<em>hot</em>" : ""}` : `<span class="prof-none">${text.trim() ? "not run" : ""}</span>`}</span>
+          <span class="prof-count">${c ? `<b>×${c}</b>${isHot ? " <em>hot</em>" : ""}` : `<span class="prof-none">${text.trim() ? "not run" : ""}</span>`}</span>
         </li>`;
       }).join("")}</ol>
     </div>`;

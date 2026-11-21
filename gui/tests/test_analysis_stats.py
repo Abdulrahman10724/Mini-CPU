@@ -39,7 +39,6 @@ class AnalysisStats(unittest.TestCase):
         self.assertEqual(s["lines_total"], 6)
         self.assertEqual(s["lines_executed"], 6)
         self.assertEqual(s["stop_line"], 6)
-        self.assertEqual(s["mix"][0]["count"], 5)
 
     def test_compare_jump_taken(self):             # contract example: CMP + JZ taken
         s = stats_for("03_cmp_jz_taken")
@@ -80,9 +79,8 @@ class AnalysisStats(unittest.TestCase):
 
     def test_labels_like_line_numbers(self):       # tests/26 = tests/05 written with a label
         a, b = stats_for("05_jnz_loop_sum"), stats_for("26_labels_loop")
-        for key in ("steps", "jumps_taken", "jumps_not_taken", "arcs", "mix", "line_counts"):
+        for key in ("steps", "jumps_taken", "jumps_not_taken", "arcs", "line_counts", "hottest"):
             self.assertEqual(a[key], b[key], key)
-        self.assertEqual(b["mix"][0]["op"], "ADD")  # "L1: ADD AX, CX" counts as ADD
 
     def test_label_alone_on_a_line(self):          # tests/28: LOOP: and END: alone
         s = stats_for("28_label_alone_line")
@@ -94,7 +92,7 @@ class AnalysisStats(unittest.TestCase):
         s = stats_for("14_empty_file")
         self.assertEqual(s["steps"], 0)
         self.assertIsNone(s["hottest"])
-        self.assertEqual(s["mix"], [])
+        self.assertEqual(s["arcs"], [])
 
 
 if __name__ == "__main__":

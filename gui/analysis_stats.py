@@ -16,9 +16,6 @@ import re
 
 REGS = ["AX", "BX", "CX", "DX"]
 JUMPS = ("JMP", "JZ", "JNZ", "JS", "JNS", "JC", "JNC")
-CATEGORY = {"MOV": "data", "ADD": "arith", "SUB": "arith", "INC": "arith", "DEC": "arith",
-            "CMP": "compare", "JMP": "control", "JZ": "control", "JNZ": "control", "HLT": "control",
-            "JS": "control", "JNS": "control", "JC": "control", "JNC": "control"}
 
 
 LABEL_AT_START = re.compile(r"\s*([^\s,:]*):")
@@ -75,18 +72,16 @@ def compute(result, code):
             return steps[k]["line"]
         return end["value"] if end["type"] == "ERRSTOP" else None
 
-    ops, changed, taken_steps = [], [], []
-    line_counts, mix, arcs = {}, {}, {}
+    changed, taken_steps = [], []
+    line_counts, arcs = {}, {}
     jumps_taken = jumps_not_taken = 0
     jump_kinds = set()
     for k in range(1, n + 1):
         st = steps[k - 1]
         words = _words(line_text(st["line"]))
         op = words[0] if words else ""
-        ops.append(op)
         changed.append([r for r in REGS if values[r][k] != values[r][k - 1]])
         line_counts[st["line"]] = line_counts.get(st["line"], 0) + 1
-        mix[op] = mix.get(op, 0) + 1
         if op in JUMPS:
             jump_kinds.add(op)
             target = None
@@ -129,13 +124,10 @@ def compute(result, code):
         "zf": zf,
         "sf": sf,
         "cf": cf,
-        "ops": ops,
         "changed": changed,
         "taken_steps": taken_steps,
         "line_counts": {str(k): v for k, v in sorted(line_counts.items())},
         "hottest": {"line": hottest[0], "count": hottest[1]} if hottest else None,
         "arcs": [{"from": f, "to": t, "count": c} for (f, t), c in sorted(arcs.items())],
-        "mix": [{"op": op, "count": c, "category": CATEGORY.get(op, "data")}
-                for op, c in sorted(mix.items(), key=lambda kv: (-kv[1], kv[0]))],
         "listing": lines,
     }
