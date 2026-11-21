@@ -1,5 +1,5 @@
-// datapath.js - the CPU datapath drawn as an inline SVG (viewBox 840 x 800,
-// close to the real shape of the panel, so nothing is wasted).
+// datapath.js - Fig. 1: the CPU datapath drawn as a printed textbook figure
+// (inline SVG, viewBox 840 x 800, close to the shape of the panel).
 //
 //   [U5 PC] ----> [U6 IMEM] ----> [U1 DECODER]
 //      ^                             |imm   |reg select
@@ -8,44 +8,46 @@
 //                       |                ^
 //                       +-- write-back --+
 //
-// build() draws everything once. showState(k) sets every part from stateAt(k)
-// (data from result.txt). The small setters (setRegister, setZF, rollPC, ...) are
-// also used by animator.js while a step is being animated.
+// buildDatapath() draws everything once. showState(k) sets every part from
+// stateAt(k) (data from result.txt). The small setters are also used by animator.js.
+// Print style: idle = thin grey rules, active = heavy ink + hatching, data = red labels.
 
 import { state, stateAt, describeStep, totalSteps, lineText, errorOnLine, REG_NAMES } from "./state.js";
 import { errorInfo } from "./errors.js";
-import { createSevenSeg } from "./sevenseg.js";
+import { penStrokes } from "./pen.js";
 
 const NS = "http://www.w3.org/2000/svg";
 
 // ------------------------------------------------------------------ geometry
 export const BLOCKS = {
-  pc:      { x: 30,  y: 50,  w: 160, h: 180, label: "U5 · PC" },
-  imem:    { x: 240, y: 50,  w: 280, h: 180, label: "U6 · IMEM" },
-  decoder: { x: 570, y: 50,  w: 240, h: 180, label: "U1 · DECODER" },
-  flags:   { x: 30,  y: 400, w: 160, h: 240, label: "U4 · FLAGS" },
-  regfile: { x: 500, y: 390, w: 310, h: 300, label: "U3 · REGFILE" },
+  pc:      { x: 30,  y: 50,  w: 160, h: 180, label: "U5 PC" },
+  imem:    { x: 240, y: 50,  w: 280, h: 180, label: "U6 IMEM" },
+  decoder: { x: 570, y: 50,  w: 240, h: 180, label: "U1 DECODER" },
+  flags:   { x: 30,  y: 400, w: 160, h: 240, label: "U4 FLAGS" },
+  regfile: { x: 500, y: 390, w: 310, h: 300, label: "U3 REGFILE" },
 };
 const ALU_SHAPE = "450,410 450,512 430,530 450,548 450,650 250,590 250,470";
+export const ALU_CENTRE = { x: 350, y: 530 };
 const GATE = { x: 200, y: 300 };
-const PC_PITCH = 76;                 // distance between digits on the PC counter strip
+const PC_PITCH = 64;                 // distance between digits on a PC counter strip
 
-// Every wire is a route of points; drawn with rounded right-angle corners (PCB traces).
+// Every wire is a route of points, drawn with sharp right angles (textbook style).
+// The first point of each route is where data leaves a block.
 export const WIRES = {
   pc_imem:   [[190, 140], [240, 140]],
   imem_dec:  [[520, 140], [570, 140]],
-  dec_reg:   [[760, 230], [760, 390]],                                  // register select
+  dec_reg:   [[760, 230], [760, 390]],                                   // register select
   imm_b:     [[620, 230], [620, 330], [480, 330], [480, 450], [450, 450]], // immediate bus
-  reg_b:     [[500, 450], [450, 450]],                                  // source register -> B
-  reg_a:     [[500, 610], [450, 610]],                                  // destination register -> A
+  reg_b:     [[500, 450], [450, 450]],                                   // source register -> B
+  reg_a:     [[500, 610], [450, 610]],                                   // destination register -> A
   alu_flags: [[250, 530], [190, 530]],
   writeback: [[250, 530], [220, 530], [220, 740], [655, 740], [655, 690]],
   jump:      [[570, 200], [545, 200], [545, 300], [110, 300], [110, 230]],  // decoder -> PC
-  cond:      [[150, 400], [150, 350], [200, 350], [200, 312]],          // flags -> gate
+  cond:      [[150, 400], [150, 350], [200, 350], [200, 312]],           // flags -> gate
 };
-const VIAS = [[190, 140], [240, 140], [520, 140], [570, 140], [760, 230], [760, 390], [620, 230],
-  [480, 450], [500, 450], [500, 610], [250, 530], [220, 530], [190, 530], [655, 690],
-  [570, 200], [110, 230], [150, 400]];
+
+// Ledger columns inside U3 REGFILE
+const LEDGER = { top: 422, head: 26, row: 58, colReg: 500, colPrev: 556, colNow: 683, right: 810 };
 
 // ------------------------------------------------------------------ svg helpers
 function el(tag, attrs, parent) {
@@ -61,88 +63,94 @@ function txt(parent, x, y, content, cls, attrs = {}) {
   return t;
 }
 
-// Path through points with rounded corners of radius r.
-export function tracePath(points, r = 10) {
-  const sign = (v) => Math.sign(v);
-  let d = `M ${points[0][0]} ${points[0][1]}`;
-  for (let i = 1; i < points.length - 1; i++) {
-    const [ax, ay] = points[i - 1];
-    const [px, py] = points[i];
-    const [bx, by] = points[i + 1];
-    const rr = Math.min(r, Math.hypot(px - ax, py - ay) / 2, Math.hypot(bx - px, by - py) / 2);
-    d += ` L ${px - sign(px - ax) * rr} ${py - sign(py - ay) * rr}`;
-    d += ` Q ${px} ${py} ${px + sign(bx - px) * rr} ${py + sign(by - py) * rr}`;
-  }
-  const [lx, ly] = points[points.length - 1];
-  return d + ` L ${lx} ${ly}`;
-}
+const pathOf = (pts) => "M " + pts.map(([x, y]) => `${x} ${y}`).join(" L ");
 
 // ------------------------------------------------------------------ build
-const dp = { wires: {}, blocks: {}, regs: [], pcDigits: [] };
+const dp = { wires: {}, blocks: {}, hatches: {}, regs: [], pcDigits: [], imemRows: [] };
 
 export function getDatapath() {
   return dp;
 }
 
-export function buildDatapath(svg, { onFormatChange }) {
+export function buildDatapath(svg, hooks) {
   dp.svg = svg;
-  dp.board = el("g", { class: "dp-board" }, svg);
-  const wireLayer = el("g", { class: "wires" }, dp.board);
-  const blockLayer = el("g", { class: "blocks" }, dp.board);
+  dp.hooks = hooks;
+  const wireLayer = el("g", { class: "wires" }, svg);
+  const blockLayer = el("g", { class: "blocks" }, svg);
+  const stubLayer = el("g", { class: "stubs" }, svg);
   dp.pulseLayer = el("g", { class: "pulses" }, svg);
 
   for (const [id, pts] of Object.entries(WIRES)) {
-    dp.wires[id] = el("path", { d: tracePath(pts), class: "wire", "data-wire": id }, wireLayer);
+    dp.wires[id] = el("path", { d: pathOf(pts), class: "wire", "data-wire": id }, wireLayer);
   }
-  for (const [x, y] of VIAS) el("circle", { cx: x, cy: y, r: 3.2, class: "via" }, wireLayer);
+  buildStubs(stubLayer);
 
-  // wire captions (silkscreen next to the traces)
-  txt(wireLayer, 628, 290, "IMM", "silk");
-  txt(wireLayer, 768, 320, "REG SEL", "silk");
-  txt(wireLayer, 236, 762, "WRITE-BACK", "silk");
-  txt(wireLayer, 300, 292, "JUMP TARGET", "silk");
+  // wire captions, like the small labels next to lines in a figure
+  txt(wireLayer, 628, 290, "IMM", "fig-label");
+  txt(wireLayer, 768, 320, "REG SEL", "fig-label");
+  txt(wireLayer, 236, 762, "WRITE-BACK", "fig-label");
+  txt(wireLayer, 300, 292, "JUMP TARGET", "fig-label");
   dp.discard = txt(wireLayer, 440, 732, "result discarded", "discard-label", { visibility: "hidden" });
 
-  buildBlocks(blockLayer, onFormatChange);
+  buildBlocks(blockLayer);
   buildGate(wireLayer);
   buildStamp(svg);
+  dp.penLayer = el("g", { class: "red-pen" }, svg);
+}
+
+// Pin stubs: short ink lines where a wire meets a block (both ends of every wire).
+function buildStubs(layer) {
+  const seen = new Set();
+  for (const pts of Object.values(WIRES)) {
+    for (const [end, next] of [[pts[0], pts[1]], [pts[pts.length - 1], pts[pts.length - 2]]]) {
+      const key = end.join(",");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const dx = Math.sign(next[0] - end[0]) * 6, dy = Math.sign(next[1] - end[1]) * 6;
+      el("line", { x1: end[0], y1: end[1], x2: end[0] + dx, y2: end[1] + dy, class: "stub" }, layer);
+    }
+  }
 }
 
 function block(layer, id) {
   const b = BLOCKS[id];
   const g = el("g", { class: "block", "data-block": id }, layer);
-  el("rect", { x: b.x, y: b.y, width: b.w, height: b.h, rx: 10, class: "block-box" }, g);
-  txt(g, b.x + 12, b.y + 18, b.label, "silk");
+  el("rect", { x: b.x, y: b.y, width: b.w, height: b.h, class: "block-box" }, g);
+  dp.hatches[id] = el("rect", { x: b.x, y: b.y, width: b.w, height: b.h, class: "hatch" }, g);
+  txt(g, b.x + 10, b.y + 17, b.label, "block-label");
   dp.blocks[id] = g;
   return g;
 }
 
-function buildBlocks(layer, onFormatChange) {
-  // ---- U5 PC: two-digit mechanical counter + "next" line
+function buildBlocks(layer) {
+  // ---- U5 PC: two boxed form-field cells; the digits roll vertically
   const pc = block(layer, "pc");
   for (let i = 0; i < 2; i++) {
-    const x = 52 + i * 62;
-    el("rect", { x, y: 78, width: 54, height: 80, rx: 6, class: "counter-window" }, pc);
+    const x = 60 + i * 52;
+    el("rect", { x, y: 74, width: 48, height: 66, class: "form-cell" }, pc);
     const clip = el("clipPath", { id: `pcClip${i}` }, pc);
-    el("rect", { x, y: 80, width: 54, height: 76 }, clip);
+    el("rect", { x, y: 75, width: 48, height: 64 }, clip);
     const viewport = el("g", { "clip-path": `url(#pcClip${i})` }, pc);
     const strip = el("g", { class: "counter-strip" }, viewport);
-    // digits 0-9 and a dash stacked 76px apart; the strip slides up and down
-    "0123456789-".split("").forEach((ch, n) => txt(strip, x + 27, 137 + n * PC_PITCH, ch, "counter-digit"));
+    "0123456789-".split("").forEach((ch, n) => txt(strip, x + 24, 123 + n * PC_PITCH, ch, "pc-digit"));
     dp.pcDigits.push(strip);
   }
-  dp.pcNext = txt(pc, 110, 200, "", "pc-next", { "text-anchor": "middle" });
+  txt(pc, 110, 160, "LINE", "fig-label", { "text-anchor": "middle" });
+  dp.pcNext = txt(pc, 110, 204, "", "pc-next", { "text-anchor": "middle" });
 
-  // ---- U6 IMEM: 5-line window of the program
+  // ---- U6 IMEM: 5-line window of the program (the middle row is the current line)
   const imem = block(layer, "imem");
-  dp.imemHi = el("rect", { x: 250, y: 127, width: 260, height: 26, rx: 5, class: "imem-hi" }, imem);
-  dp.imemRows = [];
+  dp.imemHi = el("rect", { x: 250, y: 125, width: 260, height: 26, class: "imem-hi" }, imem);
   for (let r = 0; r < 5; r++) {
-    const y = 75 + r * 26;          // the middle row (r = 2) is the current line
+    const y = 73 + r * 26;
+    const row = el("g", { class: "imem-row" }, imem);
     dp.imemRows.push({
-      num: txt(imem, 284, y + 18, "", "imem-num", { "text-anchor": "end" }),
-      text: txt(imem, 296, y + 18, "", "imem-text"),
-      y,
+      g: row,
+      mark: txt(row, 258, y + 18, "", "imem-mark"),
+      num: txt(row, 292, y + 18, "", "imem-num", { "text-anchor": "end" }),
+      text: txt(row, 304, y + 18, "", "imem-text"),
+      under: el("line", { x1: 304, y1: y + 22, x2: 500, y2: y + 22, class: "imem-under" }, row),
+      line: null,
     });
   }
 
@@ -150,151 +158,169 @@ function buildBlocks(layer, onFormatChange) {
   const dec = block(layer, "decoder");
   dp.decRows = [];
   ["op", "dst", "src"].forEach((key, r) => {
-    const y = 100 + r * 34;
-    dp.decRows.push({
-      key: txt(dec, 590, y, key, "dec-key"),
-      val: txt(dec, 636, y, "", "dec-val"),
-    });
+    const y = 98 + r * 34;
+    dp.decRows.push({ key: txt(dec, 590, y, key, "dec-key"), val: txt(dec, 636, y, "", "dec-val") });
   });
-  dp.decQuestion = txt(dec, 772, 158, "?", "dec-question", { "text-anchor": "middle", visibility: "hidden" });
-  dp.decError = txt(dec, 590, 212, "", "dec-error");
+  dp.decError = txt(dec, 590, 214, "", "dec-error");
+  dp.decQuestion = txt(dec, 690, 144, "", "dec-question", { "text-anchor": "middle" });
 
-  // ---- U3 REGFILE: four 7-segment rows + DEC/HEX/BIN toggle
+  // ---- U3 REGFILE: a ledger table  REG | PREV | NOW, and DEC / HEX / BIN tabs
   const rf = block(layer, "regfile");
   dp.formatButtons = {};
   ["dec", "hex", "bin"].forEach((f, i) => {
-    const g = el("g", { class: "fmt-btn", role: "button", tabindex: "0",
+    const g = el("g", { class: "fmt-tab", role: "button", tabindex: "0",
       "aria-label": `Show registers in ${f.toUpperCase()}` }, rf);
-    el("rect", { x: 678 + i * 40, y: 398, width: 36, height: 20, rx: 4, class: "fmt-box" }, g);
-    txt(g, 696 + i * 40, 412, f.toUpperCase(), "fmt-label", { "text-anchor": "middle" });
-    g.addEventListener("click", () => onFormatChange(f));
+    el("rect", { x: 690 + i * 38, y: 394, width: 36, height: 22, class: "fmt-hit" }, g);
+    txt(g, 708 + i * 38, 409, f.toUpperCase(), "fmt-label", { "text-anchor": "middle" });
+    el("line", { x1: 696 + i * 38, y1: 414, x2: 720 + i * 38, y2: 414, class: "fmt-under" }, g);
+    g.addEventListener("click", () => dp.hooks.onFormatChange(f));
     g.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onFormatChange(f); }
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); dp.hooks.onFormatChange(f); }
     });
     dp.formatButtons[f] = g;
   });
+  const L = LEDGER;
+  const bottom = L.top + L.head + 4 * L.row;
+  el("line", { x1: L.colReg, y1: L.top, x2: L.right, y2: L.top, class: "ledger-rule-ink" }, rf);
+  el("line", { x1: L.colReg, y1: L.top + L.head, x2: L.right, y2: L.top + L.head, class: "ledger-rule-ink" }, rf);
+  el("line", { x1: L.colPrev, y1: L.top, x2: L.colPrev, y2: bottom, class: "ledger-rule" }, rf);
+  dp.prevRule = el("line", { x1: L.colNow, y1: L.top, x2: L.colNow, y2: bottom, class: "ledger-rule" }, rf);
+  txt(rf, L.colReg + 14, L.top + 17, "REG", "ledger-head");
+  dp.prevHead = txt(rf, L.colNow - 10, L.top + 17, "PREV", "ledger-head", { "text-anchor": "end" });
+  dp.nowHead = txt(rf, L.right - 10, L.top + 17, "NOW", "ledger-head", { "text-anchor": "end" });
   REG_NAMES.forEach((name, i) => {
-    const top = 434 + i * 62;
-    const row = el("g", { class: "reg-row", "data-reg": name }, rf);
-    const flash = el("rect", { x: 508, y: top - 6, width: 294, height: 58, rx: 6, class: "reg-flash" }, row);
-    txt(row, 516, top + 22, name, "reg-name");
-    el("rect", { x: 548, y: top, width: 252, height: 34, rx: 4, class: "seg-window" }, row);
-    const seg = createSevenSeg(row, { x: 557, y: top + 5, count: 11, w: 13, h: 24, pitch: 21, t: 3.2 });
-    const bin = txt(row, 674, top + 21, "", "reg-bin", { "text-anchor": "middle", visibility: "hidden" });
-    const sub = txt(row, 800, top + 48, "", "reg-sub", { "text-anchor": "end" });
-    dp.regs.push({ row, flash, seg, bin, sub, top });
+    const top = L.top + L.head + i * L.row;
+    const row = el("g", { class: "ledger-row", "data-reg": name, tabindex: "-1" }, rf);
+    el("rect", { x: L.colReg + 1, y: top + 1, width: L.right - L.colReg - 2, height: L.row - 2, class: "ledger-band" }, row);
+    if (i < 3) el("line", { x1: L.colReg, y1: top + L.row, x2: L.right, y2: top + L.row, class: "ledger-rule" }, row);
+    txt(row, L.colReg + 14, top + 35, name, "ledger-reg");
+    const prev = txt(row, L.colNow - 10, top + 35, "—", "ledger-prev", { "text-anchor": "end" });
+    const strike = el("line", { class: "ledger-strike", pathLength: "100", visibility: "hidden" }, row);
+    const now = txt(row, L.right - 10, top + 35, "0", "ledger-now", { "text-anchor": "end" });
+    dp.regs.push({ row, prev, strike, now, top });
   });
 
-  // ---- U2 ALU: chevron shape with A/B inputs and the operation symbol
+  // ---- U2 ALU: the classic trapezoid with a V-notch
   const alu = el("g", { class: "block alu", "data-block": "alu" }, layer);
-  el("polygon", { points: ALU_SHAPE, class: "block-box alu-box" }, alu);
-  txt(alu, 250, 424, "U2 · ALU", "silk");
+  el("polygon", { points: ALU_SHAPE, class: "block-box" }, alu);
+  dp.hatches.alu = el("polygon", { points: ALU_SHAPE, class: "hatch" }, alu);
+  txt(alu, 250, 424, "U2 ALU", "block-label");
   txt(alu, 440, 455, "B", "alu-port", { "text-anchor": "end" });
   txt(alu, 440, 615, "A", "alu-port", { "text-anchor": "end" });
-  dp.aluSymbol = txt(alu, 356, 544, "", "alu-symbol", { "text-anchor": "middle" });
+  dp.aluSymbol = txt(alu, ALU_CENTRE.x + 6, ALU_CENTRE.y + 12, "", "alu-symbol", { "text-anchor": "middle" });
   dp.oneChip = el("g", { class: "one-chip", visibility: "hidden" }, alu);
-  el("rect", { x: 456, y: 420, width: 28, height: 20, rx: 4 }, dp.oneChip);
-  txt(dp.oneChip, 470, 434, "1", "", { "text-anchor": "middle" });
+  el("rect", { x: 458, y: 420, width: 24, height: 20 }, dp.oneChip);
+  txt(dp.oneChip, 470, 435, "1", "", { "text-anchor": "middle" });
   dp.blocks.alu = alu;
 
-  // ---- U4 FLAGS: the ZF LED
+  // ---- U4 FLAGS: ZF as a printed circle (hollow ring = 0, solid disc = 1)
   const flags = block(layer, "flags");
-  el("circle", { cx: 110, cy: 500, r: 36, class: "led-bezel" }, flags);
-  dp.led = el("circle", { cx: 110, cy: 500, r: 26, class: "led" }, flags);
-  el("circle", { cx: 101, cy: 490, r: 7, class: "led-shine" }, flags);
-  txt(flags, 110, 572, "ZF", "led-label", { "text-anchor": "middle" });
-  txt(flags, 110, 596, "= 0 ? 1", "led-caption", { "text-anchor": "middle" });
+  dp.zfDisc = el("circle", { cx: 110, cy: 494, r: 24, class: "zf-disc" }, flags);
+  dp.zfText = txt(flags, 110, 560, "ZF = 0", "zf-label", { "text-anchor": "middle" });
+  txt(flags, 110, 582, "(result = 0)", "zf-caption", { "text-anchor": "middle" });
 }
 
 function buildGate(layer) {
   const g = el("g", { class: "gate" }, layer);
   const { x, y } = GATE;
   el("polygon", { points: `${x},${y - 12} ${x + 12},${y} ${x},${y + 12} ${x - 12},${y}`, class: "gate-box" }, g);
-  dp.gateCross = el("path", { d: `M ${x - 5} ${y - 5} L ${x + 5} ${y + 5} M ${x + 5} ${y - 5} L ${x - 5} ${y + 5}`,
+  dp.gateCross = el("path", { d: `M ${x - 4} ${y - 4} L ${x + 4} ${y + 4} M ${x + 4} ${y - 4} L ${x - 4} ${y + 4}`,
     class: "gate-cross", visibility: "hidden" }, g);
   dp.gate = g;
 }
 
+// A red rubber stamp in the empty gap between the two rows (never over the ledger).
 function buildStamp(svg) {
-  // sits in the open gap between the two rows, so the register file stays readable
-  dp.stamp = el("g", { class: "halt-stamp", transform: "rotate(-8 380 312)", visibility: "hidden" }, svg);
-  el("rect", { x: 220, y: 270, width: 320, height: 84, rx: 12 }, dp.stamp);
-  txt(dp.stamp, 380, 333, "HALTED", "", { "text-anchor": "middle" });
+  dp.stamp = el("g", { class: "halt-stamp", transform: "rotate(-6 380 312)", visibility: "hidden" }, svg);
+  const ink = el("g", { filter: "url(#stampInk)" }, dp.stamp);
+  el("rect", { x: 240, y: 272, width: 280, height: 80 }, ink);
+  el("rect", { x: 246, y: 278, width: 268, height: 68 }, ink);
+  txt(ink, 380, 330, "HALTED", "", { "text-anchor": "middle" });
 }
 
 // ------------------------------------------------------------------ setters (also used by the animator)
-function formatReg(v) {
-  const fmt = state.regFormat;
-  if (fmt === "hex") {
-    const hex = (v >>> 0).toString(16).toUpperCase().padStart(8, "0");
-    const firstSig = Math.min(hex.search(/[^0]/) === -1 ? 7 : hex.search(/[^0]/), 7);
-    return { text: hex, dim: hex.split("").map((_, i) => i < firstSig), sub: `= ${v}` };
-  }
-  const digits = String(Math.abs(v)).padStart(10, "0");
-  const firstSig = Math.min(digits.search(/[^0]/) === -1 ? 9 : digits.search(/[^0]/), 9);
-  const text = (v < 0 ? "-" : " ") + digits;
-  return {
-    text,
-    dim: text.split("").map((_, i) => i >= 1 && i - 1 < firstSig),
-    sub: "0x" + (v >>> 0).toString(16).toUpperCase().padStart(8, "0"),
-  };
+export function formatValue(v) {
+  if (state.regFormat === "hex") return "0x" + (v >>> 0).toString(16).toUpperCase().padStart(8, "0");
+  if (state.regFormat === "bin") return (v >>> 0).toString(2).padStart(32, "0").match(/.{8}/g).join(" ");
+  return String(v);
 }
 
-export function setRegister(i, value) {
+// Show register i: `prev` (struck through) only when the value just changed.
+export function setRegister(i, now, prev = null, fresh = false) {
   const r = dp.regs[i];
-  if (state.regFormat === "bin") {
-    const bits = (value >>> 0).toString(2).padStart(32, "0");
-    r.bin.textContent = bits.match(/.{8}/g).join(" ");
-    r.bin.setAttribute("visibility", "visible");
-    r.seg.el.setAttribute("visibility", "hidden");
-    r.sub.textContent = `= ${value}`;
-  } else {
-    const f = formatReg(value);
-    r.seg.set(f.text, f.dim);
-    r.seg.el.setAttribute("visibility", "visible");
-    r.bin.setAttribute("visibility", "hidden");
-    r.sub.textContent = f.sub;
+  r.now.textContent = formatValue(now);
+  r.now.classList.remove("fresh");
+  r.strike.setAttribute("visibility", "hidden");
+  const bin = state.regFormat === "bin";
+  r.prev.textContent = prev === null || bin ? "—" : formatValue(prev);
+  r.prev.setAttribute("visibility", bin ? "hidden" : "visible");
+  if (prev !== null && !bin) {
+    const width = r.prev.getComputedTextLength();
+    const y = r.top + 31;
+    r.strike.setAttribute("x1", LEDGER.colNow - 12 - width);
+    r.strike.setAttribute("x2", LEDGER.colNow - 8);
+    r.strike.setAttribute("y1", y);
+    r.strike.setAttribute("y2", y - 2);
+    r.strike.setAttribute("visibility", "visible");
+  }
+  if (fresh) {                         // new value written in red, settles to ink (CSS)
+    void r.now.getBoundingClientRect();
+    r.now.classList.add("fresh");
   }
 }
 
 export function setZF(z) {
-  dp.led.classList.toggle("on", z === 1);
+  dp.zfDisc.classList.toggle("on", z === 1);
+  dp.zfText.textContent = `ZF = ${z}`;
 }
 
-// Roll the counter to a line number (null shows "--"). colour: "normal" | "amber" | "red"
-export function rollPC(line, colour = "normal") {
+// Roll the PC cells to a line number (null shows "--").
+export function rollPC(line) {
   const digits = line == null ? [10, 10] : [Math.floor(line / 10) % 10, line % 10];
   digits.forEach((d, i) => { dp.pcDigits[i].style.transform = `translateY(${-d * PC_PITCH}px)`; });
-  dp.blocks.pc.dataset.colour = line == null ? "idle" : colour;
 }
 
-export function setNext(content, colour = "") {
+// The small line under the PC cells: "next → 04", "halted", ... tone "" | "spot"
+export function setNext(content, tone = "") {
   dp.pcNext.textContent = content;
-  dp.pcNext.dataset.colour = colour;
+  dp.pcNext.dataset.tone = tone;
 }
 
-// Show lines around `centre` in the IMEM window; highlight `centre` (tone "cyan" | "red" | "").
-export function setImem(centre, tone = "cyan") {
+// Show lines around `centre` in the IMEM window and mark the centre row.
+export function setImem(centre, tone = "current") {
   const lines = state.resultCode ? state.resultCode.split("\n") : state.code.split("\n");
   const first = centre ? centre - 2 : 1;
   dp.imemRows.forEach((row, r) => {
     const n = first + r;
     const exists = n >= 1 && n <= lines.length && !(n === lines.length && lines[n - 1] === "");
+    row.line = exists ? n : null;
     row.num.textContent = exists ? String(n).padStart(2, "0") : "";
     const t = exists ? lines[n - 1].trim() : "";
-    row.text.textContent = t.length > 26 ? t.slice(0, 25) + "…" : t;
-    row.text.dataset.active = String(Boolean(centre) && n === centre);
+    row.text.textContent = t.length > 25 ? t.slice(0, 24) + "…" : t;
+    const isCentre = Boolean(centre) && n === centre;
+    row.mark.textContent = isCentre ? "▶" : "";
+    row.g.dataset.current = String(isCentre);
   });
   dp.imemHi.dataset.tone = centre ? tone : "";
+  markImemHover();
 }
 
-// Decoder fields for a line (display only), or the error view.
+// Hover link (step 5): underline the IMEM row of a highlighted line, if it is visible.
+let imemHoverLine = null;
+export function setImemHover(line) {
+  imemHoverLine = line;
+  markImemHover();
+}
+function markImemHover() {
+  for (const row of dp.imemRows) row.g.dataset.hover = String(row.line !== null && row.line === imemHoverLine);
+}
+
 const OP_SYMBOL = { MOV: "pass", ADD: "+", SUB: "−", CMP: "cmp", INC: "+1", DEC: "−1",
   JMP: "jmp", JZ: "jz", JNZ: "jnz", HLT: "halt" };
 
+// Decoder fields for a line (display only).
 export function decodedFields(op, a, b) {
-  const isReg = (w) => REG_NAMES.includes(w);
-  const src = (w) => (isReg(w) ? w : `#${w}`);
+  const src = (w) => (REG_NAMES.includes(w) ? w : `#${w}`);
   switch (op) {
     case "MOV": case "ADD": case "SUB": case "CMP":
       return [["op", OP_SYMBOL[op]], ["dst", a], ["src", src(b)]];
@@ -303,28 +329,39 @@ export function decodedFields(op, a, b) {
     case "JZ": return [["op", "jz"], ["to", `L${a}`], ["if", "ZF = 1"]];
     case "JNZ": return [["op", "jnz"], ["to", `L${a}`], ["if", "ZF = 0"]];
     case "HLT": return [["op", "halt"], ["", ""], ["", ""]];
-    default: return [["op", "—"], ["dst", "—"], ["src", "—"]];
+    default: return [["op", ""], ["dst", ""], ["src", ""]];
   }
 }
 
-export function setDecoder(fields, { error = null, chars = Infinity } = {}) {
-  dp.blocks.decoder.dataset.tone = error ? "red" : "";
-  dp.decQuestion.setAttribute("visibility", error ? "visible" : "hidden");
-  dp.decError.textContent = error || "";
-  let budget = chars;                      // for the "typing in" effect
+export function setDecoder(fields, { chars = Infinity } = {}) {
+  let budget = chars;                        // for the "typing in" effect
   fields.forEach(([k, v], r) => {
     dp.decRows[r].key.textContent = k;
-    const shown = v.slice(0, Math.max(0, budget));
+    dp.decRows[r].val.textContent = v.slice(0, Math.max(0, budget));
     budget -= v.length;
-    dp.decRows[r].val.textContent = shown;
   });
 }
 
-export function setAluSymbol(op, active = false) {
+// ERRSTOP: the red pen circles the decoder, with the note "✗ E1 at line 6".
+function setDecoderError(code, line) {
+  dp.penLayer.innerHTML = "";
+  dp.decError.textContent = "";
+  dp.decQuestion.textContent = "";
+  if (!code) return;
+  const key = `${code}:${line}:${state.resultCode}`;
+  dp.penLayer.classList.toggle("drawn", dp.penKey === key);
+  dp.penKey = key;
+  const g = el("g", { transform: "translate(586 66)" }, dp.penLayer);
+  penStrokes(g, 200, 120);
+  dp.decError.textContent = `✗ E${code} at line ${line}`;
+  dp.decRows.forEach((r) => { r.key.textContent = ""; r.val.textContent = ""; });
+  dp.decQuestion.textContent = "?";                  // the decoder could not decode it
+}
+
+export function setAluSymbol(op) {
   const sym = { MOV: "PASS", ADD: "+", SUB: "−", CMP: "CMP", INC: "+1", DEC: "−1" }[op] || "";
-  dp.aluSymbol.textContent = sym || "·";
+  dp.aluSymbol.textContent = sym;
   dp.aluSymbol.dataset.size = sym.length > 2 ? "small" : "big";
-  dp.blocks.alu.dataset.active = String(active && Boolean(sym));
 }
 
 export function setGate(mode) {          // "" | "pass" | "blocked"
@@ -332,26 +369,12 @@ export function setGate(mode) {          // "" | "pass" | "blocked"
   dp.gateCross.setAttribute("visibility", mode === "blocked" ? "visible" : "hidden");
 }
 
-// Highlight one phase in the strip above the SVG (null = all idle).
+// The phase tabs above the figure (null = none active).
 const PHASES = ["fetch", "decode", "execute"];
 export function setPhase(name) {
-  const index = PHASES.indexOf(name);
   document.querySelectorAll("#phaseStrip li").forEach((li, i) => {
-    li.classList.toggle("active", i === index);
-    li.classList.toggle("done", index >= 0 && i < index);
+    li.classList.toggle("active", i === PHASES.indexOf(name));
   });
-}
-
-// Purple -> green outline flash on a register, plus a "+4" tag that floats up.
-export function flashRegister(i, delta) {
-  const r = dp.regs[i];
-  r.row.removeAttribute("data-flash");
-  void r.row.getBoundingClientRect();          // restart the CSS animation
-  r.row.setAttribute("data-flash", "");
-  if (!delta) return;
-  const tag = txt(r.row, 800, r.top - 8, (delta > 0 ? "+" : "−") + Math.abs(delta), "delta-tag",
-                  { "text-anchor": "end" });
-  setTimeout(() => tag.remove(), 900);
 }
 
 export function showOneChip(on) {
@@ -360,12 +383,10 @@ export function showOneChip(on) {
 
 export function showDiscarded(on) {
   dp.discard.setAttribute("visibility", on ? "visible" : "hidden");
-  if (on) dp.wires.writeback.dataset.on = "muted";
-  else delete dp.wires.writeback.dataset.on;
+  dp.wires.writeback.classList.toggle("discarded", on);
 }
 
 export function showHalted() {
-  dp.svg.classList.add("halted");
   dp.stamp.setAttribute("visibility", "visible");
   dp.stamp.classList.remove("stamp-in");
   void dp.stamp.getBoundingClientRect();
@@ -378,53 +399,62 @@ export function showState(k) {
   const N = totalSteps();
   const r = state.result;
   const at = stateAt(k);
+  const before = stateAt(k - 1);
   const final = r && k === N;
   const errStop = final && r.end.type === "ERRSTOP";
   const halted = final && r.end.type === "HALT" && N > 0;
 
-  at.regs.forEach((v, i) => setRegister(i, v));
+  at.regs.forEach((v, i) => {
+    const changed = k > 0 && before.regs[i] !== v;
+    setRegister(i, v, changed ? before.regs[i] : null, false);
+  });
   setZF(at.zf);
   setGate("");
-  dp.discard.setAttribute("visibility", "hidden");
-  dp.oneChip.setAttribute("visibility", "hidden");
+  showDiscarded(false);
+  showOneChip(false);
   for (const w of Object.values(dp.wires)) w.removeAttribute("data-on");
   for (const b of Object.values(dp.blocks)) b.removeAttribute("data-on");
-  dp.regs.forEach((x) => x.row.removeAttribute("data-flash"));
+  setDecoderError(0);
 
   if (errStop) {
     const line = r.end.value;
     const code = errorOnLine(line) || (line === 0 ? 9 : 0);
-    rollPC(line, "red");
-    setNext("stopped here", "red");
-    setImem(line, "red");
-    setDecoder([["op", "?"], ["", ""], ["", ""]], { error: errorInfo(code).message });
+    rollPC(line);
+    setNext("stopped here", "spot");
+    setImem(line, "error");
+    setDecoderError(code, line);
     setAluSymbol("");
   } else if (k > 0) {
     const d = describeStep(k);
     rollPC(d.line);
-    if (halted) setNext("halted", "green");
-    else if (d.next) setNext(`next → ${String(d.next).padStart(2, "0")}`, d.taken ? "amber" : "");
+    if (halted) setNext("halted", "spot");
+    else if (d.next) setNext(`next → ${String(d.next).padStart(2, "0")}`, d.taken ? "spot" : "");
     else setNext(r.end.type === "NOHLT" ? "past last line" : "", "");
     setImem(d.line);
     setDecoder(decodedFields(d.op, d.a, d.b));
     setAluSymbol(d.op);
   } else {
     rollPC(null);
-    setNext(state.result ? "ready" : "", "");
+    setNext(r ? "ready" : "", "");
     setImem(null);
-    setDecoder([["op", ""], ["dst", ""], ["src", ""]]);
+    setDecoder(decodedFields("", "", ""));
     setAluSymbol("");
   }
-  dp.svg.classList.toggle("halted", halted);
   dp.stamp.setAttribute("visibility", halted ? "visible" : "hidden");
+  dp.svg.classList.toggle("empty", !state.code.trim());
   renderFormatButtons();
 }
 
 function renderFormatButtons() {
   for (const [f, g] of Object.entries(dp.formatButtons)) g.dataset.active = String(state.regFormat === f);
+  const bin = state.regFormat === "bin";
+  dp.prevHead.setAttribute("visibility", bin ? "hidden" : "visible");
+  dp.prevRule.setAttribute("visibility", bin ? "hidden" : "visible");
+  dp.nowHead.textContent = bin ? "NOW (BIN)" : "NOW";
+  dp.svg.classList.toggle("bin", bin);
 }
 
-// Header text above the SVG + the screen-reader summary of the current step.
+// Text above the figure + the screen-reader summary of the current step.
 export function renderDatapathText(s) {
   const k = s.cursor;
   const r = s.result;
@@ -434,7 +464,7 @@ export function renderDatapathText(s) {
   if (r && k === totalSteps() && r.end.type === "ERRSTOP") {
     const line = r.end.value;
     cur.textContent = `L${line} · ${lineText(line) || "error"}`;
-    cur.dataset.tone = "red";
+    cur.dataset.tone = "spot";
     live.textContent = `Stopped at line ${line}: ${errorInfo(errorOnLine(line) || 9).message}.`;
   } else if (k > 0) {
     const d = describeStep(k);
