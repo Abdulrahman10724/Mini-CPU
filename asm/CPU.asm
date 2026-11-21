@@ -296,6 +296,7 @@ ReadProgramFile ENDP
 ;           - a newline at the very end of the file does not add a line
 ;           - only the first 63 characters of a long line are kept
 ;           - more than MAX_LINES lines sets tooManyLines = 1
+;           - a UTF-8 BOM (EF BB BF) at the start of the file is skipped
 ; Receives: fileBuf, bytesRead
 ; Returns:  lineCount, tooManyLines
 ; Changes:  lineText
@@ -306,6 +307,19 @@ ReadProgramFile ENDP
 SplitLines PROC USES eax ebx edx esi edi
     mov  lineCount, 0
     mov  ebx, 0                    ; start reading at byte 0
+
+    ; Notepad can save "UTF-8 with BOM": the file then starts with the 3 bytes
+    ; EF BB BF, which are not part of the program. Skip them, otherwise line 1
+    ; would start with 3 strange characters and give error 1.
+    cmp  bytesRead, 3              ; fewer than 3 bytes -> no BOM possible
+    jb   NewLine
+    cmp  fileBuf[0], 0EFh
+    jne  NewLine
+    cmp  fileBuf[1], 0BBh
+    jne  NewLine
+    cmp  fileBuf[2], 0BFh
+    jne  NewLine
+    mov  ebx, 3                    ; BOM found: start reading at byte 3
 
 NewLine:
     cmp  ebx, bytesRead            ; any bytes left?

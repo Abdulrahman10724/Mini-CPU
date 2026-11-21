@@ -110,7 +110,15 @@ function initDrop(page) {
     table.classList.remove("dragging");
     const file = e.dataTransfer.files[0];
     if (!file) return;
+    // same limits as opening a file (bridge.py read_program_file)
     if (!/\.txt$/i.test(file.name)) { hooks.onDropError(`${file.name} is not a .txt program`); return; }
-    hooks.onAction({ act: "drop", name: file.name, code: await file.text() });
+    if (file.size > 64 * 1024) {
+      hooks.onDropError(`${file.name} is too large (${Math.round(file.size / 1024)} KB). A program has at most 50 lines.`);
+      return;
+    }
+    let code = await file.text();
+    if (code.includes("\0")) { hooks.onDropError(`${file.name} is not a text program (it contains binary data).`); return; }
+    if (code.startsWith("\uFEFF")) code = code.slice(1);           // drop a UTF-8 BOM
+    hooks.onAction({ act: "drop", name: file.name, code });
   });
 }
