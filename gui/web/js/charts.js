@@ -50,7 +50,7 @@ export function registerChart(host, stats, hooks) {
   const W = Math.max(400, host.clientWidth);
   const H = 280, ZH = 46;
   const m = { l: 64, r: 18, t: 14, b: 40 };
-  const svg = el("svg", { width: W, height: H + ZH, class: "chart", role: "img",
+  const svg = el("svg", { width: W, height: H + ZH, viewBox: `0 0 ${W} ${H + ZH}`, class: "chart", role: "img",
     "aria-label": "Register values per step" }, host);
 
   const all = REGS.flatMap((r) => stats.values[r]);
@@ -149,7 +149,7 @@ export function mixBars(host, stats) {
   const W = Math.max(320, host.clientWidth);
   const bar = 22, gap = 10, m = { l: 52, r: 44, t: 6 };
   const H = m.t + rows.length * (bar + gap) + 4;
-  const svg = el("svg", { width: W, height: H, class: "chart", role: "img", "aria-label": "Instruction mix" }, host);
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img", "aria-label": "Instruction mix" }, host);
   const max = Math.max(1, ...rows.map((r) => r.count));
   rows.forEach((row, i) => {
     const y = m.t + i * (bar + gap);

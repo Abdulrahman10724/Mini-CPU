@@ -86,11 +86,27 @@ function build(s, res) {
           <figcaption class="caption">Fig. 5 — Program profile. Bars: how often each line ran.
             Arrows: jumps that were taken, with their count. Click a line to open its last run in §2.</figcaption>
         </figure>
-        <div class="an-rest" id="anRest"></div>
+        <section class="an-block an-t2">
+          <p class="tcaption">Table 2 — Full trace: the registers and ZF after every step.
+            Values that changed in that step are marked. Click a row to open that step in §2.</p>
+          <div class="tabs trace-filters" id="traceFilters" role="radiogroup" aria-label="Filter the trace">
+            <button role="radio" data-f="all" aria-checked="true">All</button>
+            <span class="tf-label">Changes to</span>
+            ${["AX", "BX", "CX", "DX"].map((r) => `<button role="radio" data-f="reg" data-reg="${r}" aria-checked="false">${r}</button>`).join("")}
+            <button role="radio" data-f="jumps" aria-checked="false">Only jumps</button>
+            <label class="tf-line"><span class="tf-label">Line =</span>
+              <input type="number" min="1" id="tfLine" aria-label="Show only this line"></label>
+          </div>
+          <table class="sheet-table trace-table" id="traceTable" data-filter="all">
+            <thead><tr><th>Step</th><th>Line</th><th>Instruction</th><th>AX</th><th>BX</th><th>CX</th><th>DX</th><th>ZF</th></tr></thead>
+            <tbody>${traceRows(st)}</tbody>
+          </table>
+        </section>
       </div>
     </div>`;
   $("anExport").addEventListener("click", hooks.exportTrace);
   $("anPrint").addEventListener("click", () => window.print());
+  wireTraceTable();
   drawCharts();
 }
 
@@ -115,6 +131,62 @@ function summaryRows(st) {
     ...["AX", "BX", "CX", "DX"].map((r) => row(`${r} range (min → max)`, range(r), `final ${st.ranges[r].final}`)),
   ].join("");
 }
+
+// Table 2: all rows are built once (up to 500); filters only change attributes/classes.
+function traceRows(st) {
+  const taken = new Set(st.taken_steps);
+  let html = "";
+  for (let k = 1; k <= st.steps; k++) {
+    const changed = st.changed[k - 1];
+    const line = hooks.lineOfStep(k);
+    const zfChanged = st.zf[k] !== st.zf[k - 1];
+    const cell = (r) => `<td class="mono${changed.includes(r) ? " chg" : ""}">${st.values[r][k]}</td>`;
+    html += `<tr data-k="${k}" data-line="${line}" data-chg="${changed.join(" ")}"${taken.has(k) ? " data-jump" : ""} tabindex="-1">` +
+      `<td class="mono">${k}</td><td class="mono">L${line}</td><td class="mono">${esc((st.listing[line - 1] || "").trim())}</td>` +
+      cell("AX") + cell("BX") + cell("CX") + cell("DX") +
+      `<td class="mono${zfChanged ? " chg" : ""}">${st.zf[k]}</td></tr>`;
+  }
+  const end = st.end;
+  html += `<tr class="trace-end"><td class="mono" colspan="8">END ${end.type} ${end.value}</td></tr>`;
+  return html;
+}
+
+function wireTraceTable() {
+  const table = $("traceTable");
+  const filters = $("traceFilters");
+  const select = (btn) => {
+    for (const b of filters.querySelectorAll("button")) b.setAttribute("aria-checked", String(b === btn));
+  };
+  filters.addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    select(b);
+    $("tfLine").value = "";
+    clearLineFilter(table);
+    table.dataset.filter = b.dataset.f;
+    table.dataset.reg = b.dataset.reg || "";
+  });
+  $("tfLine").addEventListener("input", (e) => {
+    const n = Number(e.target.value);
+    select(null);
+    clearLineFilter(table);
+    if (!n) { table.dataset.filter = "all"; select(filters.querySelector('[data-f="all"]')); return; }
+    table.dataset.filter = "line";
+    for (const tr of table.tBodies[0].rows) if (tr.dataset.line && Number(tr.dataset.line) !== n) tr.classList.add("off");
+  });
+  table.tBodies[0].addEventListener("click", (e) => {
+    const tr = e.target.closest("tr[data-k]");
+    if (tr) hooks.openAt(Number(tr.dataset.k));
+  });
+}
+
+function clearLineFilter(table) {
+  for (const tr of table.querySelectorAll("tr.off")) tr.classList.remove("off");
+}
+
+// Before printing, draw the charts at A4 width; afterwards at screen width again.
+window.addEventListener("beforeprint", () => { document.body.classList.add("printing"); if (stats) drawCharts(); });
+window.addEventListener("afterprint", () => { document.body.classList.remove("printing"); if (stats) drawCharts(); });
 
 function drawCharts() {
   mixBars($("fig4"), stats);
