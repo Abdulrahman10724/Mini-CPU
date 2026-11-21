@@ -5,7 +5,7 @@
 import { state, update, subscribe, totalSteps, errorOnLine, stateAt, indexes, lineText as lineTextOf } from "./state.js";
 import { setHighlight, getHighlight, onHighlight } from "./highlight.js";
 import { api } from "./api.js";
-import { toast } from "./toast.js";
+import { toast, clearToast } from "./toast.js";
 import { initEditor, renderEditor, setCode, cancelLiveRun, insertLine, setLinkedLine, getEditor } from "./editor.js";
 import { buildDatapath, showState, renderDatapathText, setRegWires, setImemHover } from "./datapath.js";
 import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
@@ -295,6 +295,7 @@ function closeDemos() {
 // ------------------------------------------------------------------ sections and session
 // Called by the router whenever a section becomes visible.
 function onShowPage(page) {
+  clearToast();
   if (page === "cover") chipShown();
   else chipHidden();
   if (page === "analysis") renderAnalysis(state);

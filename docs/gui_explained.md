@@ -120,3 +120,49 @@ whole program.
 **Breakpoints** are GUI-only: click left of a line number to set ■. Run pauses on the first step
 that runs that line. CPU.exe is never told about breakpoints, because they only change *where
 the timeline stops*, not what the CPU computed.
+
+## 7. The three sheets (routing)
+
+The window is one HTML page with three `<section class="page">` elements: §1 Cover,
+§2 Workbench and §3 Analysis. Only one is visible at a time. `router.js` reads the part of the
+address after `#` (`#cover`, `#workbench`, `#analysis`); when it changes (a click in the
+section index, Alt+1/2/3, or a cover row), `show(page)`:
+
+1. hides the other pages and shows this one, with a short "sheet turn" (slide up 24 px and
+   fade in, 220 ms);
+2. underlines the right entry in the section index and updates the footer "SHEET n OF 3";
+3. tells `main.js`, which e.g. starts the chip demo on the cover or draws the analysis.
+
+The app always opens on the cover. §3 stays disabled ("Run a program first") until there is a
+result. Nothing is reloaded when switching: the Workbench keeps its program and result.
+
+## 8. Where the analysis numbers come from
+
+Every number on §3 is a **count of what result.txt says**; nothing is simulated again.
+After a run, `bridge.py` keeps the program text and the parsed result. `api.analysis()` calls
+`analysis_stats.compute(result, code)` once, which walks the STEP lines:
+
+- **Total steps, termination**: the number of STEP lines and the END line.
+- **Line counts** (Fig. 5 heat bars): how many STEP lines have each line number.
+- **Instruction mix** (Fig. 4): the opcode of each executed line (the first word of the line
+  in program.txt), counted.
+- **Ranges, final values, ZF transitions**: min / max / last of each register column, and how
+  often ZF differs from the step before.
+- **Errors**: the ERR lines.
+
+The JavaScript (`analysis.js`, `charts.js`, `profile.js`) only lays these numbers out and
+draws them. `gui/tests/test_analysis_stats.py` checks them against the known test programs
+(e.g. the loop-sum test: 18 steps, line 3 ran 5 times, 4 jumps taken, 1 not taken).
+
+## 9. How the branch arcs are found
+
+A jump (JMP, JZ, JNZ) is **taken** if the *next* STEP line is the jump's target line.
+Otherwise (the next step is simply the next line) it was **not taken**. Every taken jump adds
+1 to a counter for the pair (from line, to line); each pair becomes one arc in Fig. 5,
+labelled with its count ("4×"). Example, the loop sum: step 5 runs `JNZ 3` on line 5 and
+step 6 runs line 3, so the arc 5 → 3 gets +1; this happens 4 times, and the 5th time JNZ falls
+through to line 6.
+
+One special case: if the 500-step guard stops the CPU right on a jump, there is no next STEP
+line, so result.txt does not say where it would go. That last jump is counted neither taken
+nor not taken.
