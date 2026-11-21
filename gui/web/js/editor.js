@@ -7,6 +7,7 @@
 
 import { state, stateAt, describeStep, errorOnLine, REG_NAMES } from "./state.js";
 import { errorInfo } from "./errors.js";
+import { penStrokes } from "./pen.js";
 
 const OPCODES = ["MOV", "ADD", "SUB", "CMP", "INC", "DEC", "JMP", "JZ", "JNZ", "HLT"];
 const LIVE_DELAY_MS = 700;
@@ -239,38 +240,12 @@ function redPen(idx, key) {
   // centre the ellipse on the text: the path's centre is at w/2 + 4 inside the svg
   svg.style.left = `${LINE_PAD + start * cw + (end - start) * cw / 2 - (w / 2 + 4)}px`;
   svg.style.top = "-1px";                            // centre on the line: (24 - (h + 6)) / 2
-  [[-2, 0], [2, 1]].forEach(([deg, i]) => {
-    const p = document.createElementNS(SVG, "path");
-    p.setAttribute("d", penEllipse(w, h, i));
-    p.setAttribute("pathLength", "100");
-    p.setAttribute("transform", `rotate(${deg} ${w / 2 + 4} ${h / 2 + 3})`);
-    if (i === 1) p.style.animationDelay = "90ms";
-    svg.append(p);
-  });
+  penStrokes(svg, w, h);
   drawnPens.add(key);
   const holder = document.createElement("span");
   holder.className = "pen-holder";
   holder.append(svg);
   widgetAt(idx, 0, holder);
-}
-
-// A wobbly ellipse through 14 points whose radius changes a little (seeded, so the
-// same line always gets the same drawing). It overshoots its start like a real pen.
-function penEllipse(w, h, seed) {
-  const cx = w / 2 + 4, cy = h / 2 + 3, rx = w / 2, ry = h / 2;
-  const pts = [];
-  const steps = 14;
-  for (let i = 0; i <= steps + 2; i++) {
-    const a = -Math.PI * 0.85 + (i / steps) * Math.PI * 2;
-    const wobble = 1 + 0.05 * Math.sin(i * 2.3 + seed * 1.7);
-    pts.push([cx + Math.cos(a) * rx * wobble, cy + Math.sin(a) * ry * wobble]);
-  }
-  let d = `M ${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
-  for (let i = 1; i < pts.length - 1; i++) {
-    const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
-    d += ` Q ${pts[i][0].toFixed(1)} ${pts[i][1].toFixed(1)} ${mx.toFixed(1)} ${my.toFixed(1)}`;
-  }
-  return d;
 }
 
 function markActiveLine() {
