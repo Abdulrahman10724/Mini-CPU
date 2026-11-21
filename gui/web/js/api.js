@@ -26,4 +26,6 @@ export const api = {
   saveFile: (code, path) => call("save_file", code, path || null),
   listDemos: () => call("list_demos"),
   loadDemo: (id) => call("load_demo", id),
+  saveSession: (session) => call("save_session", session),
+  loadSession: () => call("load_session"),
 };

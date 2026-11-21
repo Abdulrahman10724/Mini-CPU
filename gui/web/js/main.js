@@ -6,11 +6,12 @@ import { state, update, subscribe, totalSteps, errorOnLine, stateAt, indexes } f
 import { setHighlight, getHighlight, onHighlight } from "./highlight.js";
 import { api } from "./api.js";
 import { toast } from "./toast.js";
-import { initEditor, renderEditor, setCode, cancelLiveRun, insertLine, setLinkedLine } from "./editor.js";
+import { initEditor, renderEditor, setCode, cancelLiveRun, insertLine, setLinkedLine, getEditor } from "./editor.js";
 import { buildDatapath, showState, renderDatapathText, setRegWires, setImemHover } from "./datapath.js";
 import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
 import { errorInfo } from "./errors.js";
 import { confirmDialog } from "./dialog.js";
+import { initRouter, go, currentPage, setAnalysisAvailable, PAGES } from "./router.js";
 import { initHistory, renderHistory, markLineRows } from "./history.js";
 import { initWaveform, renderWaveform, setTraceLink, previewStep } from "./waveform.js";
 import { initHelp, renderHelp } from "./help.js";
@@ -50,7 +51,7 @@ async function runCode(code, mode, lineHint = null) {
 function applyResult(result, code, mode, lineHint) {
   stopPlaying();
   const N = result.steps.length;
-  // the ANALYSIS button stays hidden until the Analysis page exists
+  setAnalysisAvailable(true);                       // §3 Analysis now has data
 
   if (mode === "run") {                     // Run: from step 0, animated to the end
     update({ result, resultCode: code, cursor: 0 });
@@ -284,8 +285,24 @@ function closeDemos() {
   $("demosBtn").setAttribute("aria-expanded", "false");
 }
 
-function navigate(page) {
-  toast(page === "home" ? "Home page: coming soon" : "Analysis page: coming soon");
+// ------------------------------------------------------------------ sections and session
+// Called by the router whenever a section becomes visible.
+function onShowPage(page) {
+  if (page === "workbench") {
+    getEditor().refresh();                          // CodeMirror measures itself again
+    window.dispatchEvent(new Event("resize"));
+  }
+}
+
+// The last program is remembered (gui/runtime/session.json) for the cover's Continue row.
+let lastSession = null;
+let sessionTimer = null;
+function saveSessionSoon(s, patch) {
+  if (!("code" in patch) && !("fileName" in patch)) return;
+  clearTimeout(sessionTimer);
+  sessionTimer = setTimeout(() => {
+    if (s.code.trim()) api.saveSession({ code: s.code, fileName: s.fileName, filePath: s.filePath });
+  }, 800);
 }
 
 function wireTopBar() {
@@ -297,8 +314,8 @@ function wireTopBar() {
   document.addEventListener("click", (e) => { if (!e.target.closest(".menu-wrap")) closeDemos(); });
   $("openBtn").addEventListener("click", openFile);
   $("saveBtn").addEventListener("click", saveFile);
-  $("logoBtn").addEventListener("click", () => navigate("home"));
-  $("analysisBtn").addEventListener("click", () => navigate("analysis"));
+  $("logoBtn").addEventListener("click", () => go("cover"));
+  $("analysisBtn").addEventListener("click", () => go("analysis"));
   $("runBtn").addEventListener("click", () => { cancelLiveRun(); runCode(state.code, "run"); });
   $("stepBtn").addEventListener("click", stepForward);
   $("resetBtn").addEventListener("click", resetTimeline);
@@ -314,6 +331,11 @@ function onKeyDown(e) {
   const ctrl = e.ctrlKey || e.metaKey;
   const typing = inEditor(e) || ["INPUT", "TEXTAREA"].includes(e.target.tagName);
   let handled = true;
+  if (e.altKey && ["1", "2", "3"].includes(e.key)) { go(PAGES[Number(e.key) - 1]); e.preventDefault(); return; }
+  if (currentPage() !== "workbench" && !["F1", "Escape"].includes(e.key) && !(ctrl && e.key.toLowerCase() === "o")) {
+    if (pageKeys[currentPage()]) pageKeys[currentPage()](e);   // each section's own keys
+    return;
+  }
   if (ctrl && e.key === "Enter") { cancelLiveRun(); runCode(state.code, "run"); }
   else if (e.key === "F10" && e.shiftKey) stepBack();
   else if (e.key === "F10") stepForward();
@@ -328,6 +350,9 @@ function onKeyDown(e) {
   else handled = false;
   if (handled) { e.preventDefault(); e.stopPropagation(); }
 }
+
+// Keyboard handlers of the other sections (filled in by cover.js / analysis.js).
+const pageKeys = {};
 
 function closeOverlays() {
   if (!$("demosMenu").hidden) { closeDemos(); $("demosBtn").focus(); return; }
@@ -409,6 +434,10 @@ async function boot() {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   update({ speed: reduced ? "instant" : "1", fileName: state.fileName, dirty: false, code: "" });
 
+  subscribe(saveSessionSoon);
+  initRouter({ onShow: onShowPage });
+  const session = await api.loadSession();
+  lastSession = session && session.ok ? session : null;
   update({ engine: await api.engineStatus() });
   buildDemosMenu();
 }
@@ -416,6 +445,6 @@ async function boot() {
 boot();
 
 // Small handle for debugging in the web inspector (and for the dev screenshot script).
-window.miniCpu = { state, update, goTo, play };
+window.miniCpu = { state, update, goTo, play, go };
 
 export { runCode, totalSteps };
