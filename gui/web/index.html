@@ -37,6 +37,16 @@
     <pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <line x1="0" y1="0" x2="0" y2="4" stroke="#1B1A17" stroke-opacity=".35" stroke-width="1"/>
     </pattern>
+    <!-- Fig. 4 bars: hatching by instruction category instead of colour -->
+    <pattern id="hatchLight" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#1B1A17" stroke-width="1"/>
+    </pattern>
+    <pattern id="hatchDense" width="3.2" height="3.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="3.2" stroke="#1B1A17" stroke-width="1"/>
+    </pattern>
+    <pattern id="hatchCross" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <path d="M0 0V6M0 0H6" stroke="#1B1A17" stroke-width="1"/>
+    </pattern>
     <!-- uneven ink for the rubber stamp -->
     <filter id="stampInk" x="-10%" y="-10%" width="120%" height="120%">
       <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="noise"/>

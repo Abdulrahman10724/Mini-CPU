@@ -49,3 +49,35 @@
 
 .an-empty { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); padding: 18px 22px; text-align: center; }
 .an-empty p { margin: 0 0 10px; font: italic 400 16px/1.4 var(--font-serif); }
+
+/* Fig. 4 key */
+.mix-key { display: flex; gap: 16px; margin-top: 8px; font: 500 11.5px/1 var(--font-mono); color: var(--ink-2); }
+.mix-key span { display: inline-flex; align-items: center; gap: 6px; }
+.mix-key svg rect { stroke: var(--ink); stroke-width: 1; }
+
+/* Fig. 5 program profile */
+.an-fig5 { grid-column: 1 / -1; }
+.profile { position: relative; padding-left: var(--gutter); background: var(--paper-2); border: 1px solid var(--rule); }
+.prof-arcs { position: absolute; left: 0; top: 0; overflow: visible; }
+.prof-lines { margin: 0; padding: 0; list-style: none; border-left: 1px solid rgba(217, 72, 15, .4); }
+.prof-line {
+  display: grid; grid-template-columns: 34px minmax(160px, 320px) minmax(0, 1fr); align-items: center;
+  height: var(--row); border-bottom: 1px solid var(--rule); cursor: pointer; outline: none;
+  font: 400 13px/1 var(--font-mono); color: var(--ink);
+}
+.prof-line:hover, .prof-line:focus-visible { background: var(--paper-3); }
+.prof-line.arc-hl { box-shadow: inset 0 -2px 0 var(--spot); }
+.prof-no { padding-right: 8px; text-align: right; color: var(--ink-3); font-size: 12px; }
+.prof-code { padding-left: 10px; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.prof-heat { display: flex; align-items: center; gap: 8px; padding-right: 12px; }
+.prof-heat i { display: block; height: 10px; max-width: 70%; background: var(--ink); }
+.prof-heat b { font-weight: 500; font-size: 12px; color: var(--ink-2); }
+.prof-line.hot .prof-heat i { background: var(--spot); }
+.prof-line.hot .prof-heat b { color: var(--spot-text); font-weight: 600; }
+.prof-heat em { font: italic 400 12px var(--font-serif); color: var(--spot-text); }
+.prof-none { font-size: 11.5px; color: var(--ink-3); }
+.arc-path { fill: none; stroke: var(--ink); stroke-width: 1.5; }
+.arc-head { fill: var(--ink); }
+.arc-count { font: 600 11px var(--font-mono); fill: var(--ink); }
+.arc { cursor: default; outline: none; }
+.arc.heavy .arc-path, .arc:focus-visible .arc-path { stroke-width: 3; }
