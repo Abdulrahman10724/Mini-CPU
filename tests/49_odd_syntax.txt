@@ -1,0 +1,7 @@
+MOV AX, 1
+; this is a comment
+MOV AX, 0x10
+MOV AX, 5.5
+MOV AX,,
+MOV BX, 2 ; comment
+HLT
