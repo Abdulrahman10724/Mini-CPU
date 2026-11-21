@@ -68,3 +68,36 @@
 .tb-engine { padding: 0; border: 0; background: none; cursor: default; font: inherit; color: var(--ink); text-align: left; }
 .tb-engine[data-state="missing"] { color: var(--spot-text); cursor: pointer; text-decoration: underline; }
 .tb-engine[data-state="mock"] { color: var(--spot-text); }
+
+/* ---------------------------------------------------------------- Fig. 0: the DIP-40 chip */
+#chip text { font-family: var(--font-mono); fill: var(--ink); }
+.chip-body { cursor: zoom-in; outline: none; }
+.chip-outline { fill: var(--paper); stroke: var(--ink); stroke-width: 2; }
+.chip-body:hover .chip-outline, .chip-body:focus-visible .chip-outline { stroke-width: 3; }
+.chip-body:focus-visible .chip-outline { stroke: var(--spot); }
+.chip-dot { fill: var(--ink); }
+.chip-mark text { letter-spacing: .06em; }
+.pin-leg { fill: var(--paper); stroke: var(--ink); stroke-width: 1.2; transition: fill .15s; }
+#chip .pin-num { font-size: 10.5px; fill: var(--ink-3); }
+#chip .pin-name { font-size: 11px; fill: var(--ink-2); }
+.pin-hit { fill: transparent; }
+.pin { cursor: help; }
+/* the idle demo inks in the pins used by the current instruction */
+.pin.lit .pin-leg { fill: var(--ink); }
+.pin.lit .pin-name { fill: var(--ink); font-weight: 600; }
+.pin.clk .pin-leg { fill: var(--spot); stroke: var(--spot); }
+/* hover: the pin and its label drawn heavy */
+.pin.hover .pin-leg { stroke-width: 2.5; }
+#chip .pin.hover .pin-name, #chip .pin.hover .pin-num { fill: var(--ink); font-weight: 600; }
+
+/* plotter intro: outline -> pin legs -> labels (about 1.4 s); a click skips it */
+#chip.plotting .plot { stroke-dasharray: 1; animation: plot-draw .5s linear backwards; }
+#chip.plotting .chip-outline { animation-duration: .55s; }
+#chip.plotting .plot-label, #chip.plotting .plot-late { animation: plot-ink .3s linear backwards; animation-delay: 1.05s; }
+#chip.plotting .pin-leg { fill: transparent; }
+@keyframes plot-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes plot-ink { from { opacity: 0; } }
+
+/* click the body: zoom into the die */
+#chip.zooming { transition: transform .4s ease-in, opacity .4s ease-in; transform: scale(2.4); opacity: 0;
+  transform-origin: 50% 47%; }

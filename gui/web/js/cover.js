@@ -55,7 +55,7 @@ export function initCover(coverHooks, session) {
 
       <div class="cover-right">
         <figure class="chip-fig" id="chipFig">
-          <svg id="chip" viewBox="0 0 560 640" preserveAspectRatio="xMidYMid meet" role="img"
+          <svg id="chip" viewBox="112 20 336 590" preserveAspectRatio="xMidYMid meet" role="img"
                aria-labelledby="chipTitle"><title id="chipTitle">Pin configuration of the MINI-CPU, a 40-pin DIP</title></svg>
           <p class="chip-readout" id="chipReadout" aria-live="off"></p>
           <figcaption class="caption">Fig. 0 — Pin configuration (top view).</figcaption>

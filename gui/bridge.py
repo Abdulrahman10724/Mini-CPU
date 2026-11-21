@@ -62,17 +62,35 @@ class Api:
 
     def run(self, code):
         """Save code as program.txt, run the engine, return the parsed result.txt."""
+        return self._run_in(code, RUNTIME_DIR)
+
+    def run_demo(self, demo_id):
+        """Run a demo in its own folder (runtime/demo) for the cover's idle animation,
+        so the user's program.txt / result.txt are never touched."""
+        demo = next((d for d in DEMOS if d["id"] == demo_id), None)
+        if demo is None or self._engine["state"] == "missing":
+            return {"ok": False}
+        with open(os.path.join(DEMOS_DIR, demo_id + ".txt"), "r", encoding="utf-8") as f:
+            code = f.read()
+        folder = os.path.join(RUNTIME_DIR, "demo")
+        os.makedirs(folder, exist_ok=True)
+        res = self._run_in(code, folder)
+        if res.get("ok"):
+            res["code"] = code
+        return res
+
+    def _run_in(self, code, folder):
         if self._engine["state"] == "missing":
             return {"ok": False, "error": "CPU engine not found. Start the GUI with --exe."}
-        program = os.path.join(RUNTIME_DIR, "program.txt")
-        result = os.path.join(RUNTIME_DIR, "result.txt")
+        program = os.path.join(folder, "program.txt")
+        result = os.path.join(folder, "result.txt")
         try:
             text = code.replace("\r\n", "\n").replace("\r", "\n")
             with open(program, "w", encoding="utf-8", newline="\n") as f:
                 f.write(text)
             if os.path.exists(result):
                 os.remove(result)        # never show an old result by mistake
-            subprocess.run(self._engine_command(), cwd=RUNTIME_DIR, timeout=5,
+            subprocess.run(self._engine_command(), cwd=folder, timeout=5,
                            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
                            stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
         except subprocess.TimeoutExpired:

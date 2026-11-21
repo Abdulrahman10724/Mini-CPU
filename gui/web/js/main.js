@@ -13,6 +13,7 @@ import { errorInfo } from "./errors.js";
 import { confirmDialog } from "./dialog.js";
 import { initRouter, go, currentPage, setAnalysisAvailable, PAGES } from "./router.js";
 import { initCover, renderCoverEngine, renderOrders, coverKeys } from "./cover.js";
+import { initChip, chipShown, chipHidden, setDemoTrace } from "./chip.js";
 import { initHistory, renderHistory, markLineRows } from "./history.js";
 import { initWaveform, renderWaveform, setTraceLink, previewStep } from "./waveform.js";
 import { initHelp, renderHelp } from "./help.js";
@@ -293,6 +294,8 @@ function closeDemos() {
 // ------------------------------------------------------------------ sections and session
 // Called by the router whenever a section becomes visible.
 function onShowPage(page) {
+  if (page === "cover") chipShown();
+  else chipHidden();
   if (page === "workbench") {
     getEditor().refresh();                          // CodeMirror measures itself again
     window.dispatchEvent(new Event("resize"));
@@ -315,6 +318,19 @@ async function coverAction(a) {
   }
   go("workbench");
   getEditor().focus();
+}
+
+// A paper slip next to a hovered chip pin (null hides it).
+function showPinSlip(text, rect) {
+  const tip = $("errTip");
+  if (!text) { tip.hidden = true; return; }
+  tip.innerHTML = `<div class="slip-head"></div>`;
+  tip.firstChild.textContent = text;
+  tip.hidden = false;
+  const app = $("app").getBoundingClientRect();
+  const left = Math.min(rect.right - app.left + 8, app.width - tip.offsetWidth - 16);
+  tip.style.left = `${Math.max(16, left)}px`;
+  tip.style.top = `${rect.top - app.top - tip.offsetHeight - 4}px`;
 }
 
 // The last program is remembered (gui/runtime/session.json) for the cover's Continue row.
@@ -458,7 +474,6 @@ async function boot() {
   update({ speed: reduced ? "instant" : "1", fileName: state.fileName, dirty: false, code: "" });
 
   subscribe(saveSessionSoon);
-  initRouter({ onShow: onShowPage });
   const session = await api.loadSession();
   lastSession = session && session.ok ? session : null;
   initCover({
@@ -467,8 +482,19 @@ async function boot() {
     onDropError: (msg) => toast(msg, "red"),
   }, lastSession);
   pageKeys.cover = coverKeys;
+  initChip({
+    onPinHover: showPinSlip,
+    onEnterDie: () => {                              // the chip body was clicked
+      if (!state.code.trim() && lastSession) loadProgram(lastSession.code, lastSession.fileName, lastSession.filePath);
+      go("workbench");
+    },
+  });
   subscribe(renderCoverEngine);
+  initRouter({ onShow: onShowPage });               // after the cover and chip exist
   update({ engine: await api.engineStatus() });
+  if (state.engine.state !== "missing") {           // the chip's idle demo: demo 03's real trace
+    api.runDemo("03_loop_sum").then((res) => setDemoTrace(res && res.ok ? res : null));
+  }
   buildDemosMenu();
 }
 
