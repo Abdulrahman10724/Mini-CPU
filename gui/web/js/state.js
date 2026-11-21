@@ -56,9 +56,60 @@ export function lineText(n) {
   return (lines[n - 1] || "").trim();
 }
 
-// Split a line into words, for DISPLAY only (labels, colours, which wires to light).
+// ------------------------------------------------------------------ labels (display only)
+// "L1: ADD AX, CX" -> label "L1". CPU.exe already resolved every jump (PASS 1/2 in
+// CPU.asm) and result.txt only has line numbers; the GUI reads labels only to SHOW them.
+const LABEL_AT_START = /^\s*([^\s,:]*):/;
+
+// { label: "L1" or null, rest: "ADD AX, CX", restStart: index where rest begins }
+export function splitLabel(text) {
+  const m = text.match(LABEL_AT_START);
+  return m ? { label: m[1].toUpperCase(), rest: text.slice(m[0].length), restStart: m[0].length }
+           : { label: null, rest: text, restStart: 0 };
+}
+
+// Map NAME -> line number (first definition wins, like CPU.asm), for lines of text.
+const labelCache = { code: null, map: new Map() };
+export function labelsIn(code) {
+  if (labelCache.code === code) return labelCache.map;
+  const map = new Map();
+  code.split("\n").forEach((t, i) => {
+    const { label } = splitLabel(t);
+    if (label && !map.has(label)) map.set(label, i + 1);
+  });
+  labelCache.code = code;
+  labelCache.map = map;
+  return map;
+}
+
+// The line a jump operand points to: a line number, or a label's line (null if unknown).
+export function jumpTargetOf(word, code) {
+  if (/^[-+]?\d+$/.test(word)) return parseInt(word, 10);
+  return labelsIn(code).get(word.toUpperCase()) ?? null;
+}
+
+// Where execution continues after going to line n: empty and label-only lines make no
+// STEP, so it is the first non-empty line from n on (null = past the last line).
+function landing(n, lines) {
+  while (n >= 1 && n <= lines.length && words(lines[n - 1]).length === 0) n++;
+  return n >= 1 && n <= lines.length ? n : null;
+}
+
+// Did the jump on `line` (operand `a`) go to its target? Read from the data: `next` is
+// the line result.txt ran after it. Same rule as gui/analysis_stats.py.
+export function jumpTaken(op, a, line, next, code) {
+  const target = jumpTargetOf(a, code);
+  if (target === null) return false;
+  const lines = code.split("\n");
+  const goesTo = landing(target, lines);
+  const fallsTo = landing(line + 1, lines);
+  return next === goesTo && (goesTo !== fallsTo || op === "JMP");
+}
+
+// Split a line into words, for DISPLAY only (colours, which wires to light).
+// A label in front ("L1:") is not a word of the instruction.
 export function words(text) {
-  return text.toUpperCase().split(/[\s,]+/).filter(Boolean);
+  return splitLabel(text).rest.toUpperCase().split(/[\s,]+/).filter(Boolean);
 }
 
 // The line that runs after step k, read from result.txt:
@@ -79,10 +130,10 @@ export function describeStep(k) {
   const [op = "", a = "", b = ""] = words(text);
   const next = nextLine(k);
   const isJump = op === "JMP" || op === "JZ" || op === "JNZ";
-  const target = isJump ? parseInt(a, 10) : null;
+  const target = isJump ? jumpTargetOf(a, state.resultCode || "") : null;
   return {
     k, line: after.line, text, op, a, b, before, after, next, isJump, target,
-    taken: isJump && next === target,                       // the data shows where it went
+    taken: isJump && jumpTaken(op, a, after.line, next, state.resultCode || ""),   // from the data
     changed: [0, 1, 2, 3].filter((i) => before.regs[i] !== after.regs[i]),
     zfChanged: before.zf !== after.zf,
   };

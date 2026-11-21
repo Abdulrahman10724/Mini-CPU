@@ -47,6 +47,7 @@
 .cm-s-notebook .cm-opcode   { font-weight: 600; color: var(--ink); }
 .cm-s-notebook .cm-register { color: var(--ink); }
 .cm-s-notebook .cm-number   { color: var(--ink-2); }
+.cm-s-notebook .cm-label    { font-style: italic; color: var(--ink); }   /* "L1:" (colon included) */
 .cm-s-notebook .cm-comma    { color: var(--ink-3); }
 
 /* the line executed at the current step: a solid wash across the full width */

@@ -54,7 +54,8 @@ class AnalysisStats(unittest.TestCase):
 
     def test_jmp_over_empty_line(self):            # JMP 4 lands on an empty line
         s = stats_for("06_jmp_empty_lines")
-        self.assertEqual(s["jumps_taken"], 1)       # JMP 8 (line 6 -> 8)
+        self.assertEqual(s["jumps_taken"], 2)       # JMP 4 (lands on line 5) and JMP 8
+        self.assertEqual(s["arcs"], [{"from": 2, "to": 4, "count": 1}, {"from": 6, "to": 8, "count": 1}])
         self.assertEqual(s["lines_total"], 7)       # the empty line does not count
 
     def test_negative_ranges(self):
@@ -76,6 +77,18 @@ class AnalysisStats(unittest.TestCase):
         self.assertEqual((s["jumps_taken"], s["jumps_not_taken"]), (249, 0))
         self.assertEqual(s["line_counts"], {"1": 250, "2": 250})
         self.assertEqual(s["ranges"]["AX"]["max"], 250)
+
+    def test_labels_like_line_numbers(self):       # tests/26 = tests/05 written with a label
+        a, b = stats_for("05_jnz_loop_sum"), stats_for("26_labels_loop")
+        for key in ("steps", "jumps_taken", "jumps_not_taken", "arcs", "mix", "line_counts"):
+            self.assertEqual(a[key], b[key], key)
+        self.assertEqual(b["mix"][0]["op"], "ADD")  # "L1: ADD AX, CX" counts as ADD
+
+    def test_label_alone_on_a_line(self):          # tests/28: LOOP: and END: alone
+        s = stats_for("28_label_alone_line")
+        self.assertEqual(s["lines_total"], 5)       # the two label-only lines are empty
+        self.assertEqual(s["arcs"], [{"from": 4, "to": 2, "count": 2}, {"from": 5, "to": 7, "count": 1}])
+        self.assertEqual(s["jumps_taken"], 3)       # 2x JNZ LOOP + JMP END (to line 7)
 
     def test_empty_program(self):
         s = stats_for("14_empty_file")

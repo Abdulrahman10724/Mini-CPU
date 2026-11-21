@@ -31,7 +31,7 @@ DEMOS = [
     {"id": "02_compare_jump", "title": "Compare and jump",
      "description": "CMP sets the Zero Flag, JZ skips a line"},
     {"id": "03_loop_sum", "title": "Loop: sum 1 to 5",
-     "description": "DEC and JNZ repeat a loop until CX reaches 0"},
+     "description": "DEC and JNZ L1 repeat a loop until CX reaches 0"},
 ]
 
 # Hide the console window of CPU.exe on Windows (the constant only exists there).

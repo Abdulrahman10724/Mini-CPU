@@ -90,7 +90,7 @@ and screenshotted where MASM is not available. The header then shows a dashed re
         js/help.js          help appendices A-C
         js/dialog.js        paper-slip confirm dialog
         js/engine.js        engine status label, popover, "engine missing" slip
-        js/errors.js        error code -> message + hint (one place)
+        js/errors.js        error code -> message + hint (one place; codes 1-12)
         js/toast.js         small paper-slip messages
         vendor/codemirror   CodeMirror 5 (MIT, LICENSE included)
         fonts/              IBM Plex Sans, Mono, Serif Italic (OFL, LICENSE in each folder)

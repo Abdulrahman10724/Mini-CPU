@@ -13,8 +13,17 @@ const INSTRUCTIONS = [
   ["DEC", "CX", "Subtract 1 from the register", "1 if result is 0"],
   ["JMP", "3", "Go to line 3", "unchanged"],
   ["JZ", "7", "Go to line 7 if ZF is 1", "unchanged"],
-  ["JNZ", "3", "Go to line 3 if ZF is 0", "unchanged"],
+  ["JNZ", "L1", "Go to the line labelled L1: if ZF is 0", "unchanged"],
   ["HLT", "", "Stop the program", "unchanged"],
+];
+
+// Labels: what they look like and what they do (help text only).
+const LABELS = [
+  ["L1: ADD AX, CX", "A label in front of an instruction. JNZ L1 jumps to this line; falling into it from the line above works too."],
+  ["LOOP:", "A label alone on a line. It is an empty line: a jump to it continues with the next line."],
+  ["JNZ L1 · JNZ 3", "Jumps take a label or a line number. A label may be defined below the jump."],
+  ["Names", "1–12 letters, digits or _, starting with a letter; not an instruction or register name; one label per line; any case (l1 = L1)."],
+  ["MOV AX, L1", "Not allowed (E2): labels can only be used with JMP, JZ, JNZ. The CPU has no memory, so a label is only a place to jump to."],
 ];
 
 const SHORTCUTS = [
@@ -43,6 +52,7 @@ export function initHelp(hooks) {
         <td><button class="ctl insert" data-i="${i}" aria-label="Insert ${op} ${args}">INSERT</button></td></tr>`).join("");
   const errors = Object.entries(ERRORS).map(([code, e]) => `
     <tr><td class="mono code">E${code}</td><td><b>${e.message}</b></td><td>${e.hint}</td></tr>`).join("");
+  const labelRows = LABELS.map(([ex, what]) => `<tr><td class="mono">${ex}</td><td>${what}</td></tr>`).join("");
   const keys = SHORTCUTS.map(([k, what]) => `<tr><td class="mono">${k}</td><td>${what}</td></tr>`).join("");
 
   drawer.innerHTML = `
@@ -52,6 +62,8 @@ export function initHelp(hooks) {
       <h3 class="appendix">Appendix A — Instruction set</h3>
       <table class="sheet-table"><thead><tr><th>Syntax</th><th>Effect</th><th>ZF</th><th></th></tr></thead>
         <tbody>${rows}</tbody></table>
+      <p class="tcaption">Labels</p>
+      <table class="sheet-table"><tbody>${labelRows}</tbody></table>
       <h3 class="appendix">Appendix B — Error codes</h3>
       <table class="sheet-table"><thead><tr><th>Code</th><th>Message</th><th>Hint</th></tr></thead>
         <tbody>${errors}</tbody></table>

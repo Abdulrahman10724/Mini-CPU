@@ -11,8 +11,15 @@ export const ERRORS = {
   7: { message: "Too many lines", hint: "The program can have at most 50 lines" },
   8: { message: "First operand must be a register", hint: "Write the register first, e.g. MOV AX, 5" },
   9: { message: "program.txt not found", hint: "Engine could not read the program file" },
+  10: { message: "Undefined label", hint: "Define the label at the start of a line, e.g. L1: ADD AX, CX" },
+  11: { message: "Duplicate label", hint: "Each label name can be defined only once" },
+  12: { message: "Invalid label name", hint: "1-12 letters, digits or _, starting with a letter; not an instruction or register; one label per line" },
 };
 
-export function errorInfo(code) {
-  return ERRORS[code] || { message: `Error ${code}`, hint: "" };
+// ctx.labelUsed: the line uses a label as a MOV/ADD/SUB/CMP operand (error 2),
+// so the hint explains that instead of listing the registers.
+export function errorInfo(code, ctx = {}) {
+  const info = ERRORS[code] || { message: `Error ${code}`, hint: "" };
+  if (code === 2 && ctx.labelUsed) return { ...info, hint: "Labels can only be used with JMP, JZ, JNZ" };
+  return info;
 }
