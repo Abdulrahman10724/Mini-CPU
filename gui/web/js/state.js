@@ -95,3 +95,24 @@ export function errorOnLine(n) {
   const e = r.errors.find((x) => x.line === n);
   return e ? e.code : 0;
 }
+
+// Look-up tables built ONCE per result, so linked highlighting stays fast at 500 steps:
+//   byLine.get(3) -> [3, 6, 9, ...]   steps that executed line 3
+//   byReg.AX      -> [1, 3, 6, ...]   steps that changed AX
+let indexCache = { result: undefined, byLine: new Map(), byReg: {} };
+
+export function indexes() {
+  if (indexCache.result === state.result) return indexCache;
+  const byLine = new Map();
+  const byReg = { AX: [], BX: [], CX: [], DX: [] };
+  const steps = state.result ? state.result.steps : [];
+  steps.forEach((st, i) => {
+    const k = i + 1;
+    if (!byLine.has(st.line)) byLine.set(st.line, []);
+    byLine.get(st.line).push(k);
+    const before = stateAt(k - 1).regs;
+    [st.ax, st.bx, st.cx, st.dx].forEach((v, r) => { if (v !== before[r]) byReg[REG_NAMES[r]].push(k); });
+  });
+  indexCache = { result: state.result, byLine, byReg };
+  return indexCache;
+}

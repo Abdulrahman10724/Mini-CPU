@@ -5,7 +5,7 @@
 // Live mode: Enter runs CPU.exe at once; any other edit runs it 700 ms after the
 // user stops typing. The actual run is done by main.js (hooks.liveRun).
 
-import { state, stateAt, describeStep, errorOnLine, REG_NAMES } from "./state.js";
+import { state, stateAt, describeStep, errorOnLine, indexes, REG_NAMES } from "./state.js";
 import { errorInfo } from "./errors.js";
 import { penStrokes } from "./pen.js";
 
@@ -63,10 +63,15 @@ export function initEditor(host, editorHooks) {
     if (!programmatic) scheduleLiveRun();
   });
   cm.on("cursorActivity", markActiveLine);
+  // the margin: line number = jump to that line's last execution; left strip = breakpoint
+  cm.on("gutterClick", (_, line, gutter) => {
+    if (gutter === "bp-gutter") hooks.onToggleBreakpoint(line + 1);
+    else hooks.onJumpToLine(line + 1);
+  });
 
   const wrapper = cm.getWrapperElement();
   wrapper.addEventListener("mousemove", onHover);
-  wrapper.addEventListener("mouseleave", hideSlip);
+  wrapper.addEventListener("mouseleave", () => { hideSlip(); hooks.onHighlight(null); });
   markActiveLine();
   return cm;
 }
@@ -255,8 +260,19 @@ function markActiveLine() {
   markActiveLine.prev = line;
 }
 
-// ------------------------------------------------------------------ hover slip
-// Hovering an error line shows a paper slip with the code, message and hint.
+// ------------------------------------------------------------------ linked highlight (step)
+// A hovered step (waveform column / log row) underlines its line: a band, NOT the
+// solid wash + ▶ of the current step, so the two never look the same.
+let linkedLine = null;
+export function setLinkedLine(line) {
+  if (linkedLine !== null && linkedLine <= cm.lineCount()) cm.removeLineClass(linkedLine - 1, "wrap", "line-linked");
+  linkedLine = line !== null && line <= cm.lineCount() ? line : null;
+  if (linkedLine !== null) cm.addLineClass(linkedLine - 1, "wrap", "line-linked");
+}
+
+// ------------------------------------------------------------------ hover
+// A register token -> highlight that register everywhere. Anywhere else on a line ->
+// highlight the line, and show a slip: the error, or "Ran 5× · last at step 15 · AX ← 15".
 function lineUnderMouse(e) {
   const pos = cm.coordsChar({ left: e.clientX, top: e.clientY }, "window");
   const box = cm.charCoords({ line: pos.line, ch: 0 }, "window");
@@ -265,13 +281,35 @@ function lineUnderMouse(e) {
 }
 
 function onHover(e) {
+  const token = e.target.closest && e.target.closest(".cm-register");
   const hit = lineUnderMouse(e);
-  const code = hit ? errorOnLine(hit.line) : 0;
-  if (!code) { hideSlip(); return; }
-  const info = errorInfo(code);
+  if (token) {
+    const cls = [...token.classList].find((c) => c.startsWith("cm-reg-"));
+    hooks.onHighlight({ kind: "reg", value: cls.slice("cm-reg-".length) });
+  } else {
+    hooks.onHighlight(hit && cm.getLine(hit.line - 1).trim() ? { kind: "line", value: hit.line } : null);
+  }
+  if (!hit || !state.result || !cm.getLine(hit.line - 1).trim()) { hideSlip(); return; }
+
+  const code = errorOnLine(hit.line);
+  if (code) {
+    const info = errorInfo(code);
+    showSlip(e, hit.box,
+      `<div class="slip-head"><b class="slip-code">E${code}</b> ${info.message}</div>` +
+      `<div class="slip-hint">${info.hint}</div>`);
+    return;
+  }
+  // time-travel preview: how often this line ran, when it last ran, and what it did
+  const runs = indexes().byLine.get(hit.line) || [];
+  if (runs.length === 0) {
+    showSlip(e, hit.box, `<div class="slip-head">Not run</div>`);
+    return;
+  }
+  const last = runs[runs.length - 1];
+  const did = noteHtml(last, 1).replace(/<[^>]+>/g, "");
   showSlip(e, hit.box,
-    `<div class="slip-head"><b class="slip-code">E${code}</b> ${info.message}</div>` +
-    `<div class="slip-hint">${info.hint}</div>`);
+    `<div class="slip-head">Ran ${runs.length}× · last at step ${last}${did ? " · " + did : ""}</div>` +
+    `<div class="slip-hint">Click the line number to jump there.</div>`);
 }
 
 function showSlip(e, box, html) {

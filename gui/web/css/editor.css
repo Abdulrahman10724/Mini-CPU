@@ -77,3 +77,13 @@
 .slip-code { color: var(--spot-text); margin-right: 4px; }
 .slip-hint { margin-top: 2px; font: 400 12px/1.45 var(--font-ui); color: var(--ink-2); }
 .slip-rows { margin-top: 4px; font: 400 12px/1.5 var(--font-mono); color: var(--ink-2); }
+
+/* linked highlighting (hover), never the same look as the current step */
+.app[data-hl-reg="AX"] .cm-reg-AX, .app[data-hl-reg="BX"] .cm-reg-BX,
+.app[data-hl-reg="CX"] .cm-reg-CX, .app[data-hl-reg="DX"] .cm-reg-DX {
+  text-decoration: underline; text-decoration-color: var(--spot);
+  text-decoration-thickness: 2px; text-underline-offset: 4px;
+}
+.cm-s-notebook .cm-register { cursor: default; }
+/* a hovered step: a red band under its line (the current step is a solid wash + ▶) */
+.cm-s-notebook .line-linked { box-shadow: inset 0 -2px 0 var(--spot); }

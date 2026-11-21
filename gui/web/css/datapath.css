@@ -124,3 +124,12 @@
 /* engine missing: a paper slip over the figure */
 .engine-card { position: absolute; left: 50%; top: 45%; transform: translate(-50%, -50%); width: 440px; padding: 18px 20px; }
 .dp-stage.engine-missing #datapath { opacity: .35; }
+
+/* linked highlighting */
+.wire.linked { stroke: var(--ink); stroke-width: var(--stroke-active); }
+.app[data-hl-reg="AX"] .ledger-row[data-reg="AX"] .ledger-band,
+.app[data-hl-reg="BX"] .ledger-row[data-reg="BX"] .ledger-band,
+.app[data-hl-reg="CX"] .ledger-row[data-reg="CX"] .ledger-band,
+.app[data-hl-reg="DX"] .ledger-row[data-reg="DX"] .ledger-band { fill: url(#hatch); }
+.ledger-row { cursor: default; }
+.ledger-row:focus-visible .ledger-band { stroke: var(--spot); stroke-width: 2; }

@@ -198,6 +198,13 @@ function buildBlocks(layer) {
     const strike = el("line", { class: "ledger-strike", pathLength: "100", visibility: "hidden" }, row);
     const now = txt(row, L.right - 10, top + 35, "0", "ledger-now", { "text-anchor": "end" });
     dp.regs.push({ row, prev, strike, now, top });
+    // linked highlighting: hovering (or focusing) a ledger row highlights that register
+    row.setAttribute("tabindex", "0");
+    row.setAttribute("aria-label", `Register ${name}`);
+    row.addEventListener("mouseenter", () => dp.hooks.onRegHover(name));
+    row.addEventListener("mouseleave", () => dp.hooks.onRegHover(null));
+    row.addEventListener("focus", () => dp.hooks.onRegHover(name));
+    row.addEventListener("blur", () => dp.hooks.onRegHover(null));
   });
 
   // ---- U2 ALU: the classic trapezoid with a V-notch
@@ -305,7 +312,22 @@ export function setImem(centre, tone = "current") {
   markImemHover();
 }
 
-// Hover link (step 5): underline the IMEM row of a highlighted line, if it is visible.
+// Linked highlighting: draw the wires that carry register `reg` in the current step
+// heavy (dst -> ALU A and the write-back; src -> ALU B). null = none.
+export function setRegWires(reg) {
+  for (const w of Object.values(dp.wires)) w.classList.remove("linked");
+  if (!reg || state.cursor < 1) return;
+  const d = describeStep(state.cursor);
+  if (!["MOV", "ADD", "SUB", "CMP", "INC", "DEC"].includes(d.op)) return;
+  if (d.a === reg) {
+    if (d.op !== "MOV") dp.wires.reg_a.classList.add("linked");
+    if (d.op !== "CMP") dp.wires.writeback.classList.add("linked");
+    dp.wires.dec_reg.classList.add("linked");
+  }
+  if (d.b === reg) dp.wires.reg_b.classList.add("linked");
+}
+
+// Linked highlighting: underline the IMEM row of a highlighted line, if it is visible.
 let imemHoverLine = null;
 export function setImemHover(line) {
   imemHoverLine = line;

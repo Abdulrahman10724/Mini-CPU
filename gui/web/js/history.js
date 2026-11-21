@@ -1,29 +1,44 @@
-// history.js - the right-hand list: one row per executed step, then the END row.
-// Rows are built ONCE per result (up to 500); moving the timeline only moves the
-// highlight, so long programs stay smooth.
+// history.js - the execution log: a ruled table  # · L · INSTRUCTION · Δ,
+// one row per executed step, then the END row.
+// Rows are built ONCE per result (up to 500); moving the cursor only moves the
+// "current" mark, so long programs stay smooth.
 
-import { describeStep, REG_NAMES } from "./state.js";
+import { describeStep, indexes, REG_NAMES } from "./state.js";
 
 let rows = [];
 let currentRow = null;
-let builtFor = null;
-let onSelect = () => {};
+let builtFor;
+let hooks = null;
+let marked = [];
 
-export function initHistory(hooks) {
-  onSelect = hooks.onSelect;
+export function initHistory(historyHooks) {
+  hooks = historyHooks;
   const list = document.getElementById("historyList");
   list.addEventListener("click", (e) => {
-    const row = e.target.closest(".h-row[data-k]");
-    if (row) onSelect(Number(row.dataset.k));
+    const row = e.target.closest(".log-row[data-k]");
+    if (row) hooks.onSelect(Number(row.dataset.k));
   });
   list.addEventListener("keydown", (e) => {
-    const row = e.target.closest(".h-row[data-k]");
+    const row = e.target.closest(".log-row[data-k]");
     if (!row) return;
     const k = Number(row.dataset.k);
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(k); }
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); hooks.onSelect(k); }
     if (e.key === "ArrowDown" && rows[k]) { e.preventDefault(); rows[k].focus(); }
     if (e.key === "ArrowUp" && k > 1) { e.preventDefault(); rows[k - 2].focus(); }
   });
+  // linked highlighting: a register name -> that register; anywhere else -> that step
+  list.addEventListener("mouseover", (e) => {
+    const reg = e.target.closest("[data-reg]");
+    const row = e.target.closest(".log-row[data-k]");
+    if (reg) hooks.onHighlight({ kind: "reg", value: reg.dataset.reg });
+    else if (row) hooks.onHighlight({ kind: "step", value: Number(row.dataset.k) });
+  });
+  list.addEventListener("mouseleave", () => hooks.onHighlight(null));
+  list.addEventListener("focusin", (e) => {
+    const row = e.target.closest(".log-row[data-k]");
+    if (row) hooks.onHighlight({ kind: "step", value: Number(row.dataset.k) });
+  });
+  list.addEventListener("focusout", () => hooks.onHighlight(null));
 }
 
 export function renderHistory(s) {
@@ -32,44 +47,44 @@ export function renderHistory(s) {
 }
 
 const escapeHtml = (t) => t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const regTag = (i) => `<span class="reg" data-reg="${REG_NAMES[i]}">${REG_NAMES[i]}</span>`;
 
-// The "what changed" column, from the step's data.
+// The Δ column: what this step changed, from the step's data.
 function changeHtml(d) {
-  if (d.op === "HLT") return `<span class="zf1">halt</span>`;
-  if (d.isJump) return d.taken ? `<span class="jump">→ L${d.next}</span>` : "↓ next";
-  if (d.op === "CMP") {
-    const z = d.after.zf;
-    return d.zfChanged ? `ZF ${d.before.zf}→<b class="${z ? "zf1" : ""}">${z}</b>` : `ZF = ${z}`;
-  }
+  if (d.op === "HLT") return "■ HALT";
+  if (d.isJump) return d.taken ? `→ L${d.next}` : "↓";
+  if (d.op === "CMP") return d.zfChanged ? `ZF ${d.before.zf}→<b>${d.after.zf}</b>` : `ZF ${d.after.zf}`;
   const i = d.changed.length ? d.changed[0] : REG_NAMES.indexOf(d.a);
   if (i < 0) return "";
-  if (!d.changed.length) return `<span class="reg">${REG_NAMES[i]}</span> = ${d.after.regs[i]}`;
-  return `<span class="reg">${REG_NAMES[i]}</span> ${d.before.regs[i]}→<b>${d.after.regs[i]}</b>`;
+  if (!d.changed.length) return `${regTag(i)} ${d.after.regs[i]}`;
+  return `${regTag(i)} ${d.before.regs[i]}→<b>${d.after.regs[i]}</b>`;
 }
 
 function build(s) {
   builtFor = s.result;
   currentRow = null;
+  marked = [];
   const list = document.getElementById("historyList");
   const r = s.result;
   const N = r ? r.steps.length : 0;
-  document.getElementById("stepCountChip").textContent = `${N} ${N === 1 ? "step" : "steps"}`;
+  document.getElementById("stepCountChip").textContent = `${N} ${N === 1 ? "STEP" : "STEPS"}`;
   document.getElementById("historyEmpty").hidden = Boolean(r) && (N > 0 || r.end.type === "ERRSTOP");
   if (!r) { list.innerHTML = ""; rows = []; return; }
 
   let html = "";
   for (let k = 1; k <= N; k++) {
     const d = describeStep(k);
-    html += `<li class="h-row" data-k="${k}" tabindex="-1">` +
-      `<span class="h-n">#${k}</span><span class="h-line">L${d.line}</span>` +
-      `<span class="h-ins">${escapeHtml(d.text)}</span><span class="h-chg">${changeHtml(d)}</span></li>`;
+    const chg = d.changed.map((i) => REG_NAMES[i]).join(" ");
+    html += `<li class="log-row" data-k="${k}" data-line="${d.line}" data-chg="${chg}" tabindex="-1">` +
+      `<span class="c-n">${k}</span><span class="c-l">L${d.line}</span>` +
+      `<span class="c-ins">${escapeHtml(d.text)}</span><span class="c-d">${changeHtml(d)}</span></li>`;
   }
   const end = r.end;
-  const detail = end.type === "ERRSTOP" ? `line ${end.value}` : `${end.value} ${end.value === 1 ? "step" : "steps"}`;
-  html += `<li class="h-row h-end"><span class="h-n">end</span>` +
-    `<span><span class="end-badge end-${end.type}">${end.type}</span><span class="end-value">${detail}</span></span></li>`;
+  const detail = end.type === "ERRSTOP" ? `L${end.value}` : `${end.value}`;
+  const red = end.type === "ERRSTOP" || end.type === "LOOP" ? " end-red" : "";
+  html += `<li class="log-end"><span class="end-tag${red}">${end.type} ${detail}</span></li>`;
   list.innerHTML = html;
-  rows = [...list.querySelectorAll(".h-row[data-k]")];
+  rows = [...list.querySelectorAll(".log-row[data-k]")];
 }
 
 function highlight(k) {
@@ -81,4 +96,15 @@ function highlight(k) {
   currentRow.tabIndex = 0;
   currentRow.setAttribute("aria-current", "step");
   currentRow.scrollIntoView({ block: "nearest" });
+}
+
+// Linked highlighting: mark the rows of every step that ran `line` (null = none).
+export function markLineRows(line) {
+  for (const row of marked) row.classList.remove("linked");
+  marked = [];
+  if (line === null) return;
+  for (const k of indexes().byLine.get(line) || []) {
+    const row = rows[k - 1];
+    if (row) { row.classList.add("linked"); marked.push(row); }
+  }
 }

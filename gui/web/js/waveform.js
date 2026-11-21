@@ -43,6 +43,14 @@ export function initWaveform(waveHooks) {
   const labels = $("traceLabels");
   labels.innerHTML = ROWS.map((r) =>
     `<div class="t-label" data-row="${r}"${r.endsWith("X") ? ` data-reg="${r}" tabindex="0"` : ""}>${r}</div>`).join("");
+  // linked highlighting: hovering or focusing a register row label
+  for (const el of labels.querySelectorAll("[data-reg]")) {
+    const reg = el.dataset.reg;
+    el.addEventListener("mouseenter", () => hooks.onRegHover(reg));
+    el.addEventListener("mouseleave", () => hooks.onRegHover(null));
+    el.addEventListener("focus", () => hooks.onRegHover(reg));
+    el.addEventListener("blur", () => hooks.onRegHover(null));
+  }
 
   const plot = $("tracePlot");
   plot.addEventListener("scroll", () => draw());
@@ -354,23 +362,51 @@ function keepCursorVisible() {
   if (x < left + 30 || x > right - END_W / 2) plot.scrollLeft = Math.max(0, x - layout.W / 3);
 }
 
-// Hook for linked highlighting (step 5): extra overlay marks, e.g. a register band.
+// ------------------------------------------------------------------ linked highlighting
+// reg  -> a light band across that register's row
+// line -> a small red tick on the ruler at every step where that line ran
 let extraMarks = null;
-export function setTraceMarks(fn) {
-  extraMarks = fn;
+export function setTraceLink(h, stepsOfLine) {
+  extraMarks = null;
+  if (h && h.kind === "reg" && layout) {
+    extraMarks = () => {
+      const { y, h: rowH } = layout.rows[h.value];
+      const band = document.createElement("div");
+      band.className = "t-band";
+      band.style.top = `${y - 1}px`;
+      band.style.height = `${rowH + 2}px`;
+      return band;
+    };
+  } else if (h && h.kind === "line" && layout) {
+    extraMarks = () => {
+      const frag = document.createDocumentFragment();
+      for (const k of stepsOfLine) {
+        const tick = document.createElement("div");
+        tick.className = "t-tick";
+        tick.style.left = `${colCentre(k) - 1}px`;
+        frag.append(tick);
+      }
+      return frag;
+    };
+  }
+  const label = h && h.kind === "reg" ? h.value : null;
+  for (const el of $("traceLabels").children) el.classList.toggle("linked", el.dataset.row === label);
   placeOverlay();
 }
-export function traceGeometry() {
-  return { layout, colX, colCentre, colW, data };
+
+// Show the hover column + tooltip for step k without moving the cursor (a log row
+// is hovered). null hides it.
+export function previewStep(k) {
+  setHover(k, true);
 }
 
 // ------------------------------------------------------------------ hover tooltip
-function setHover(k) {
-  if (k === hoverK) return;
+function setHover(k, silent = false) {
+  if (k === hoverK || !data) return;
   hoverK = k;
   placeOverlay();
   const tip = $("traceTip");
-  if (k === null) { tip.hidden = true; hooks.onHover(null); return; }
+  if (k === null) { tip.hidden = true; if (!silent) hooks.onHover(null); return; }
   const v = data.vals;
   const where = k === 0 ? "start" : `L${v.PC[k]} ${describeStep(k).text}`;
   tip.textContent = `step ${k} · ${where} · AX ${v.AX[k]} BX ${v.BX[k]} CX ${v.CX[k]} DX ${v.DX[k]} ZF ${v.ZF[k]}`;
@@ -379,7 +415,7 @@ function setHover(k) {
   const x = plot.getBoundingClientRect().left - trace.left + colCentre(k) - plot.scrollLeft;
   tip.style.left = `${Math.min(Math.max(8, x + 10), trace.width - 460)}px`;
   tip.hidden = false;
-  hooks.onHover(k);
+  if (!silent) hooks.onHover(k);
 }
 
 // ------------------------------------------------------------------ input

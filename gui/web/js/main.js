@@ -2,15 +2,16 @@
 // Flow of one run:  editor text -> api.run() -> Python writes program.txt, runs CPU.exe,
 // parses result.txt -> state.result -> every component re-renders from state.
 
-import { state, update, subscribe, totalSteps, errorOnLine } from "./state.js";
+import { state, update, subscribe, totalSteps, errorOnLine, stateAt, indexes } from "./state.js";
+import { setHighlight, getHighlight, onHighlight } from "./highlight.js";
 import { api } from "./api.js";
 import { toast } from "./toast.js";
-import { initEditor, renderEditor, setCode, cancelLiveRun, insertLine } from "./editor.js";
-import { buildDatapath, showState, renderDatapathText } from "./datapath.js";
+import { initEditor, renderEditor, setCode, cancelLiveRun, insertLine, setLinkedLine } from "./editor.js";
+import { buildDatapath, showState, renderDatapathText, setRegWires, setImemHover } from "./datapath.js";
 import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
 import { errorInfo } from "./errors.js";
-import { initHistory, renderHistory } from "./history.js";
-import { initWaveform, renderWaveform } from "./waveform.js";
+import { initHistory, renderHistory, markLineRows } from "./history.js";
+import { initWaveform, renderWaveform, setTraceLink, previewStep } from "./waveform.js";
 import { initHelp, renderHelp } from "./help.js";
 import { initEngineUi, renderEngine, closeEnginePopover } from "./engine.js";
 
@@ -89,17 +90,44 @@ async function play() {
   const token = ++playToken;
   update({ playing: true });
   if (state.speed === "instant") {
-    goTo(N);
+    goTo(nextBreakpointStep(state.cursor) || N);
   } else {
     while (token === playToken && state.cursor < N) {
       const finished = await goTo(state.cursor + 1, { animate: true });
-      if (!finished) break;
+      if (!finished || atBreakpoint()) break;
     }
   }
   if (token === playToken) {
     update({ playing: false });
-    if (state.cursor === N) announceEnd();
+    if (atBreakpoint() && state.cursor < N) toast(`Paused at breakpoint, line ${stateAt(state.cursor).line}`);
+    else if (state.cursor === N) announceEnd();
   }
+}
+
+// Breakpoints (GUI only): playback stops on a step whose line has a breakpoint.
+function atBreakpoint() {
+  return state.cursor > 0 && state.breakpoints.has(stateAt(state.cursor).line);
+}
+
+function nextBreakpointStep(from) {
+  const steps = state.result.steps;
+  for (let k = from + 1; k <= steps.length; k++) if (state.breakpoints.has(steps[k - 1].line)) return k;
+  return 0;
+}
+
+function toggleBreakpoint(line) {
+  const set = new Set(state.breakpoints);
+  if (set.has(line)) set.delete(line);
+  else set.add(line);
+  update({ breakpoints: set });
+}
+
+// Click on a line number: jump to the LAST time that line ran.
+function jumpToLine(line) {
+  const runs = indexes().byLine.get(line);
+  if (!runs) { toast(`Line ${line} has not run`); return; }
+  stopPlaying();
+  goTo(runs[runs.length - 1]);
 }
 
 function stopPlaying() {
@@ -145,9 +173,31 @@ function announceEnd() {
 // ------------------------------------------------------------------ datapath
 function renderDatapath(s, patch) {
   const changed = "result" in patch || "cursor" in patch || "regFormat" in patch || "code" in patch;
-  if (changed && !isAnimating()) showState(s.cursor);     // the animator draws while it runs
+  if (changed && !isAnimating()) {
+    showState(s.cursor);                                    // the animator draws while it runs
+    renderLinks(getHighlight());                            // keep a linked highlight up to date
+  }
   renderDatapathText(s);
 }
+
+// ------------------------------------------------------------------ linked highlighting
+// One hovered thing (a register, a line or a step) is shown in every panel at once.
+function renderLinks(h) {
+  const kind = h ? h.kind : null;
+  const reg = kind === "reg" ? h.value : null;
+  const stepLine = kind === "step" && h.value > 0 ? stateAt(h.value).line : null;
+  const line = kind === "line" ? h.value : stepLine;
+
+  $("app").dataset.hlReg = reg || "";               // CSS: editor tokens, ledger row, log rows
+  setRegWires(reg);                                  // datapath wires that carry it
+  setImemHover(line);                                // the IMEM row of that line
+  markLineRows(kind === "line" ? h.value : null);    // log rows that ran the line
+  setLinkedLine(stepLine);                           // editor line of a hovered step
+  setTraceLink(h, kind === "line" ? indexes().byLine.get(h.value) || [] : []);
+  if (kind === "step") previewStep(h.value);
+}
+
+const highlightReg = (reg) => setHighlight(reg ? { kind: "reg", value: reg } : null);
 
 // ------------------------------------------------------------------ top bar
 function renderTopBar(s, patch) {
@@ -181,7 +231,8 @@ function confirmDiscard() {
 function loadProgram(code, fileName, filePath) {
   cancelLiveRun();
   setCode(code);
-  update({ code, fileName, filePath, dirty: false, result: null, resultCode: "", cursor: 0, playing: false });
+  update({ code, fileName, filePath, dirty: false, result: null, resultCode: "", cursor: 0, playing: false,
+    breakpoints: new Set() });
   runCode(code, "live");
 }
 
@@ -319,9 +370,10 @@ async function boot() {
   }
   subscribe(renderTopBar);
   subscribe(renderEditor);
-  buildDatapath($("datapath"), { onFormatChange: (f) => update({ regFormat: f }) });
+  buildDatapath($("datapath"), { onFormatChange: (f) => update({ regFormat: f }), onRegHover: highlightReg });
+  onHighlight(renderLinks);
   subscribe(renderDatapath);
-  initHistory({ onSelect: (k) => { stopPlaying(); goTo(k); } });
+  initHistory({ onSelect: (k) => { stopPlaying(); goTo(k); }, onHighlight: setHighlight });
   subscribe(renderHistory);
   initWaveform({
     onSeek: (k) => { if (k !== state.cursor) { stopPlaying(); goTo(k); } },
@@ -330,7 +382,8 @@ async function boot() {
     onTogglePlay: togglePlay,
     onNext: stepForward,
     onLast: () => { stopPlaying(); goTo(totalSteps()); },
-    onHover: () => {},
+    onHover: (k) => setHighlight(k === null ? null : { kind: "step", value: k }),
+    onRegHover: highlightReg,
   });
   subscribe(renderWaveform);
   window.addEventListener("keydown", onKeyDown, true);   // capture: before CodeMirror
@@ -344,6 +397,9 @@ async function boot() {
   initEditor($("editorHost"), {
     onCodeChange: (code, { programmatic }) => update({ code, dirty: programmatic ? state.dirty : true }),
     liveRun: (code, lineHint) => runCode(code, "live", lineHint),
+    onHighlight: setHighlight,
+    onJumpToLine: jumpToLine,
+    onToggleBreakpoint: toggleBreakpoint,
   });
   wireTopBar();
 
