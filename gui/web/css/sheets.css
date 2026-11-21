@@ -1,0 +1,40 @@
+/* sheets.css - the execution log, help appendix, toasts, dialogs and engine slip. */
+
+/* ---------------------------------------------------------------- execution log: a ruled table */
+.log-cols, .log-row {
+  display: grid; grid-template-columns: 34px 34px minmax(0, 1fr) auto; column-gap: 8px; align-items: center;
+}
+.log-cols {
+  flex: none; height: 26px; padding: 0 8px 0 10px; border-bottom: 1px solid var(--ink);
+  font: 600 10px/1 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+}
+.log-cols span:last-child { text-align: right; }
+.log-list { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none; }
+.log-row {
+  position: relative; height: 28px; padding: 0 8px 0 10px; cursor: pointer;
+  border-bottom: 1px solid var(--rule);
+  font: 400 12px/1 var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink);
+}
+.log-row:hover { background: var(--paper-3); }
+.log-row .c-n { color: var(--ink-3); text-align: right; }
+.log-row .c-l { color: var(--ink-2); }
+.log-row .c-ins { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log-row .c-d { text-align: right; white-space: nowrap; color: var(--ink-2); }
+.log-row .c-d b { color: var(--ink); font-weight: 600; }
+.log-row .reg { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule);
+  text-underline-offset: 3px; }
+/* the current step: wash + 2px spot bar on the left */
+.log-row.current { background: var(--spot-wash); }
+.log-row.current::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--spot); }
+.log-row.current .c-n { color: var(--spot-text); font-weight: 600; }
+/* linked rows (a hovered register or line): a spot rule on the RIGHT edge, no wash */
+.log-row.linked::after,
+.app[data-hl-reg="AX"] .log-row[data-chg~="AX"]::after, .app[data-hl-reg="BX"] .log-row[data-chg~="BX"]::after,
+.app[data-hl-reg="CX"] .log-row[data-chg~="CX"]::after, .app[data-hl-reg="DX"] .log-row[data-chg~="DX"]::after {
+  content: ""; position: absolute; right: 0; top: 4px; bottom: 4px; width: 3px; background: var(--spot);
+}
+.log-end { padding: 10px 10px 14px; }
+.end-tag { display: inline-block; padding: 3px 7px; border: 1px solid var(--ink);
+  font: 600 11px/1.2 var(--font-mono); letter-spacing: .06em; color: var(--ink); }
+.end-tag.end-red { border-color: var(--spot); color: var(--spot-text); }
+.empty-note { margin: 24px 0; text-align: center; font: italic 400 13px/1.4 var(--font-serif); color: var(--ink-2); }

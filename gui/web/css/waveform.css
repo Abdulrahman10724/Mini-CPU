@@ -45,3 +45,9 @@
 
 .trace-tip { position: absolute; z-index: 30; bottom: calc(100% + 8px); padding: 5px 9px; white-space: nowrap; pointer-events: none; }
 .caption-trace { margin-top: 6px; }
+
+/* linked highlighting */
+.t-band { position: absolute; left: 0; right: 0; background: var(--spot-wash); }
+.t-tick { position: absolute; top: 12px; width: 2px; height: 9px; background: var(--spot); }
+.t-label.linked { text-decoration: underline; text-decoration-color: var(--spot);
+  text-decoration-thickness: 2px; text-underline-offset: 3px; }
