@@ -28,7 +28,7 @@ let queued = null;          // only the LATEST request waits while a run is busy
 
 async function runCode(code, mode, lineHint = null) {
   if (state.engine.state === "missing") {
-    if (mode !== "live") toast("CPU engine not found. See the engine status in the top bar.", "red");
+    if (mode !== "live") toast("CPU engine not found. See the card in the Workbench datapath.", "red");
     return;
   }
   if (runBusy) { queued = { code, mode, lineHint }; return; }
@@ -39,6 +39,7 @@ async function runCode(code, mode, lineHint = null) {
   update({ running: false });
 
   if (!res.ok) {
+    if (res.engine) update({ engine: res.engine });   // CPU.exe vanished: show the "missing" card
     toast(res.error, "red", { sticky: true });
     if (res.raw) console.warn("result.txt was:\n" + res.raw);
   } else {
