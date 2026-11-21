@@ -1,4 +1,5 @@
-// help.js - the help drawer (F1 or the ? button): instructions, error codes, shortcuts.
+// help.js - the help sheet (F1 or the ? button), laid out like the appendix pages of a
+// datasheet: A instruction set, B error codes, C shortcuts.
 // The instruction text here is help text only; CPU.exe decides what is valid.
 
 import { ERRORS } from "./errors.js";
@@ -26,6 +27,10 @@ const SHORTCUTS = [
   ["Ctrl+O / Ctrl+S", "Open / save"],
   ["F1", "Help"],
   ["Esc", "Close this panel or a popup"],
+  ["Click a line number", "Jump to the last time that line ran"],
+  ["Click the left margin", "Set or clear a breakpoint (Run pauses there)"],
+  ["← / → in the trace", "Step back / forward (Home / End: first / last)"],
+  ["Ctrl + wheel on the trace", "Zoom in / out; the wheel scrolls"],
 ];
 
 let onClose = () => {};
@@ -34,25 +39,29 @@ export function initHelp(hooks) {
   onClose = hooks.onClose;
   const drawer = document.getElementById("helpDrawer");
   const rows = INSTRUCTIONS.map(([op, args, what, zf], i) => `
-    <tr><td><span class="help-syntax"><span class="op">${op}</span> ${args}</span></td>
-        <td>${what}<br><span class="help-zf">ZF: ${zf}</span></td>
-        <td><button class="insert-btn" data-i="${i}" aria-label="Insert ${op} ${args}">Insert</button></td></tr>`).join("");
+    <tr><td class="mono"><b>${op}</b> ${args}</td><td>${what}</td><td class="mono">${zf}</td>
+        <td><button class="ctl insert" data-i="${i}" aria-label="Insert ${op} ${args}">INSERT</button></td></tr>`).join("");
   const errors = Object.entries(ERRORS).map(([code, e]) => `
-    <tr><td><span class="err-code">${code}</span></td><td><b>${e.message}</b><br>${e.hint}</td></tr>`).join("");
-  const keys = SHORTCUTS.map(([k, what]) => `<tr><td><span class="kbd">${k}</span></td><td>${what}</td></tr>`).join("");
+    <tr><td class="mono code">E${code}</td><td><b>${e.message}</b></td><td>${e.hint}</td></tr>`).join("");
+  const keys = SHORTCUTS.map(([k, what]) => `<tr><td class="mono">${k}</td><td>${what}</td></tr>`).join("");
 
   drawer.innerHTML = `
-    <div class="panel-head"><h2 class="panel-title">Help</h2>
-      <button class="btn-icon" id="helpClose" aria-label="Close help"><svg class="icon"><use href="#i-close"/></svg></button></div>
+    <div class="sec-head"><h2 class="sec-title">Appendices</h2>
+      <button class="ctl" id="helpClose" aria-label="Close help">CLOSE <svg class="icon"><use href="#i-close"/></svg></button></div>
     <div class="help-body">
-      <h3>Instructions</h3><table class="help-table">${rows}</table>
-      <h3>Errors</h3><table class="help-table">${errors}</table>
-      <h3>Shortcuts</h3><table class="help-table">${keys}</table>
+      <h3 class="appendix">Appendix A — Instruction set</h3>
+      <table class="sheet-table"><thead><tr><th>Syntax</th><th>Effect</th><th>ZF</th><th></th></tr></thead>
+        <tbody>${rows}</tbody></table>
+      <h3 class="appendix">Appendix B — Error codes</h3>
+      <table class="sheet-table"><thead><tr><th>Code</th><th>Message</th><th>Hint</th></tr></thead>
+        <tbody>${errors}</tbody></table>
+      <h3 class="appendix">Appendix C — Shortcuts</h3>
+      <table class="sheet-table"><tbody>${keys}</tbody></table>
     </div>`;
 
   drawer.querySelector("#helpClose").addEventListener("click", onClose);
   drawer.addEventListener("click", (e) => {
-    const b = e.target.closest(".insert-btn");
+    const b = e.target.closest(".insert");
     if (!b) return;
     const [op, args] = INSTRUCTIONS[Number(b.dataset.i)];
     hooks.onInsert(args ? `${op} ${args}` : op);
