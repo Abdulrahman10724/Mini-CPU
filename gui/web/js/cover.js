@@ -7,8 +7,8 @@ const $ = (id) => document.getElementById(id);
 
 const FEATURES = [
   "Four 32-bit general-purpose registers: AX, BX, CX, DX",
-  "10-instruction set: MOV, ADD, SUB, CMP, INC, DEC, JMP, JZ, JNZ, HLT",
-  "Zero Flag with conditional branching",
+  "14-instruction set: MOV ADD SUB CMP INC DEC, JMP JZ JNZ JS JNS JC JNC, HLT",
+  "Zero, Sign and Carry flags (x86 rules) with 6 conditional jumps",
   "Live syntax checking with 9 diagnostic codes",
   "Programs loaded from and saved to text files",
   "Step-by-step execution trace, up to 500 steps",

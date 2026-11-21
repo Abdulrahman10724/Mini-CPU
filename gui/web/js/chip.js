@@ -7,7 +7,7 @@
 // - click the body: "zoom into the die" and open §2 Workbench
 // The pin names are a teaching picture of our datapath, not a real electrical chip.
 
-import { REG_NAMES, words, jumpTaken } from "./state.js";
+import { REG_NAMES, OPCODES, JUMP_OPS, words, jumpTaken } from "./state.js";
 
 const NS = "http://www.w3.org/2000/svg";
 const $ = (id) => document.getElementById(id);
@@ -53,7 +53,7 @@ function pinInfo(name) {
   }[name] || name;
 }
 
-const OPS = ["MOV", "ADD", "SUB", "CMP", "INC", "DEC", "JMP", "JZ", "JNZ", "HLT"];
+const OPS = OPCODES;                  // opcode number = index + 1 (fits the 4 OP pins)
 
 let svg = null;
 let hooks = null;
@@ -189,7 +189,7 @@ function lightStep(k) {
   const [op = "", a = "", b = ""] = words(text);
   const opNo = OPS.indexOf(op) + 1;
   const next = k < demo.steps.length ? demo.steps[k].line : null;
-  const taken = ["JMP", "JZ", "JNZ"].includes(op) && jumpTaken(op, a, st.line, next, demo.lines.join("\n"));
+  const taken = JUMP_OPS.includes(op) && jumpTaken(op, a, st.line, next, demo.lines.join("\n"));
 
   light(["VCC"]);
   pins.get("CLK").g.classList.add("clk");          // the only red: a tick on CLK every step

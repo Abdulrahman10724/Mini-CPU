@@ -2,7 +2,7 @@
 // CPU.exe only writes the number (CONTRACT.md); the GUI turns it into a message.
 
 export const ERRORS = {
-  1: { message: "Unknown instruction", hint: "Use MOV, ADD, SUB, CMP, INC, DEC, JMP, JZ, JNZ or HLT" },
+  1: { message: "Unknown instruction", hint: "Use MOV, ADD, SUB, CMP, INC, DEC, JMP, JZ, JNZ, JS, JNS, JC, JNC or HLT" },
   2: { message: "Invalid register", hint: "Registers are AX, BX, CX and DX" },
   3: { message: "Missing operand", hint: "This instruction needs more operands" },
   4: { message: "Extra operand", hint: "This instruction has too many operands" },
@@ -20,6 +20,6 @@ export const ERRORS = {
 // so the hint explains that instead of listing the registers.
 export function errorInfo(code, ctx = {}) {
   const info = ERRORS[code] || { message: `Error ${code}`, hint: "" };
-  if (code === 2 && ctx.labelUsed) return { ...info, hint: "Labels can only be used with JMP, JZ, JNZ" };
+  if (code === 2 && ctx.labelUsed) return { ...info, hint: "Labels can only be used with jumps (JMP, JZ, JNZ, JS, JNS, JC, JNC)" };
   return info;
 }

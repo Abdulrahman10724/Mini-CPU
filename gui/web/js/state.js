@@ -2,8 +2,15 @@
 // Every component renders from it. Components never talk to each other directly:
 // they call update(), and update() tells every subscriber what changed.
 //
-// All CPU facts (register values, ZF, which line ran, errors, how it ended) come
+// All CPU facts (register values, ZF/SF/CF, which line ran, errors, how it ended) come
 // from result.txt via state.result. The helpers below only LOOK UP that data.
+
+// The instruction names and which ones are jumps (display only; CPU.asm decides).
+export const OPCODES = ["MOV", "ADD", "SUB", "CMP", "INC", "DEC", "JMP", "JZ", "JNZ", "HLT", "JS", "JNS", "JC", "JNC"];
+export const JUMP_OPS = ["JMP", "JZ", "JNZ", "JS", "JNS", "JC", "JNC"];
+export const FLAG_NAMES = ["ZF", "SF", "CF"];
+// The flag a conditional jump reads, and the value that makes it jump.
+export const JUMP_COND = { JZ: ["ZF", 1], JNZ: ["ZF", 0], JS: ["SF", 1], JNS: ["SF", 0], JC: ["CF", 1], JNC: ["CF", 0] };
 
 export const state = {
   code: "",                 // editor text
@@ -44,9 +51,9 @@ export function totalSteps() {
 // CPU state after step k (k = 0 means "before step 1": everything is zero).
 export function stateAt(k) {
   const steps = state.result ? state.result.steps : [];
-  if (k <= 0 || steps.length === 0) return { k: 0, regs: [0, 0, 0, 0], zf: 0, line: null };
+  if (k <= 0 || steps.length === 0) return { k: 0, regs: [0, 0, 0, 0], zf: 0, sf: 0, cf: 0, line: null };
   const s = steps[Math.min(k, steps.length) - 1];
-  return { k, regs: [s.ax, s.bx, s.cx, s.dx], zf: s.zf, line: s.line };
+  return { k, regs: [s.ax, s.bx, s.cx, s.dx], zf: s.zf, sf: s.sf, cf: s.cf, line: s.line };
 }
 
 // Line n of the program that produced the result (1-based), trimmed.
@@ -129,13 +136,15 @@ export function describeStep(k) {
   const text = lineText(after.line);
   const [op = "", a = "", b = ""] = words(text);
   const next = nextLine(k);
-  const isJump = op === "JMP" || op === "JZ" || op === "JNZ";
+  const isJump = JUMP_OPS.includes(op);
   const target = isJump ? jumpTargetOf(a, state.resultCode || "") : null;
   return {
     k, line: after.line, text, op, a, b, before, after, next, isJump, target,
     taken: isJump && jumpTaken(op, a, after.line, next, state.resultCode || ""),   // from the data
     changed: [0, 1, 2, 3].filter((i) => before.regs[i] !== after.regs[i]),
     zfChanged: before.zf !== after.zf,
+    // flags that changed in this step, e.g. ["SF", "CF"]
+    flagsChanged: FLAG_NAMES.filter((f) => before[f.toLowerCase()] !== after[f.toLowerCase()]),
   };
 }
 

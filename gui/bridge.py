@@ -87,11 +87,12 @@ class Api:
             return {"ok": False, "error": "Run a program first."}
         out = io.StringIO()
         w = csv.writer(out, lineterminator="\n")
-        w.writerow(["step", "line", "instruction", "AX", "BX", "CX", "DX", "ZF"])
+        w.writerow(["step", "line", "instruction", "AX", "BX", "CX", "DX", "ZF", "SF", "CF"])
         lines = self._last["code"].replace("\r\n", "\n").split("\n")
         for st in self._last["result"]["steps"]:
             text = lines[st["line"] - 1].strip() if st["line"] <= len(lines) else ""
-            w.writerow([st["n"], st["line"], text, st["ax"], st["bx"], st["cx"], st["dx"], st["zf"]])
+            w.writerow([st["n"], st["line"], text, st["ax"], st["bx"], st["cx"], st["dx"],
+                        st["zf"], st["sf"], st["cf"]])
         w.writerow(["END", self._last["result"]["end"]["type"], self._last["result"]["end"]["value"]])
         try:
             chosen = self._window.create_file_dialog(SAVE_DIALOG, save_filename=file_name,

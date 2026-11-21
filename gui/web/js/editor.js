@@ -6,11 +6,10 @@
 // Enter too, restarts the timer). While waiting, the old results stay visible but
 // dimmed, and the line being typed shows no error. The run itself is in main.js.
 
-import { state, stateAt, describeStep, errorOnLine, indexes, REG_NAMES, splitLabel, labelsIn, words } from "./state.js";
+import { state, stateAt, describeStep, errorOnLine, indexes, REG_NAMES, OPCODES, JUMP_OPS, splitLabel, labelsIn, words } from "./state.js";
 import { errorInfo } from "./errors.js";
 import { penStrokes } from "./pen.js";
 
-const OPCODES = ["MOV", "ADD", "SUB", "CMP", "INC", "DEC", "JMP", "JZ", "JNZ", "HLT"];
 const LIVE_DELAY_MS = 900;
 const SVG = "http://www.w3.org/2000/svg";
 const LINE_PAD = 12;        // left padding of a code line (editor.css)
@@ -248,7 +247,7 @@ function noteHtml(j, count) {
   const d = describeStep(j);
   let html;
   if (d.op === "HLT") html = "■ HALT";
-  else if (d.op === "CMP") html = `ZF ← ${d.after.zf}`;
+  else if (d.op === "CMP") html = `ZF ${d.after.zf} SF ${d.after.sf} CF ${d.after.cf}`;
   else if (d.isJump) html = d.taken ? `→ L${d.next}` : (d.next ? `↓ L${d.next}` : "↓");
   else {
     const reg = REG_NAMES.indexOf(d.a);
@@ -263,7 +262,8 @@ function noteHtml(j, count) {
 // A hand-drawn ellipse around the FAULTY TOKEN of an error line (two slightly
 // different strokes, drawn with stroke-dashoffset the first time it appears).
 // Which token to circle is chosen only for display; CPU.exe decided the error.
-const OPERANDS = { MOV: 2, ADD: 2, SUB: 2, CMP: 2, INC: 1, DEC: 1, JMP: 1, JZ: 1, JNZ: 1, HLT: 0 };
+const OPERANDS = { MOV: 2, ADD: 2, SUB: 2, CMP: 2, INC: 1, DEC: 1, JMP: 1, JZ: 1, JNZ: 1, HLT: 0,
+  JS: 1, JNS: 1, JC: 1, JNC: 1 };
 
 // The character range to circle: { s, e } (e exclusive), or { s, dot: true } for a
 // small circle (missing operand: at the end of the line).
@@ -280,7 +280,7 @@ function penTarget(text, code) {
   if (code === 11 && labelBox) return labelBox;      // duplicate: circle the label
   if (words.length === 0) return labelBox;
   const whole = { s: words[0].s, e: words[words.length - 1].e };
-  const isJump = ["JMP", "JZ", "JNZ"].includes(words[0].w);
+  const isJump = JUMP_OPS.includes(words[0].w);
   switch (code) {
     case 10: return words[1] || whole;                                   // the undefined label
     case 1: return words[0];                                             // unknown opcode

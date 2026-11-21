@@ -33,7 +33,7 @@ class ExpectedFilesParse(unittest.TestCase):
                 self.assertIn(r["end"]["type"], ("HALT", "NOHLT", "ERRSTOP", "LOOP"))
                 for i, step in enumerate(r["steps"], 1):
                     self.assertEqual(step["n"], i)
-                    self.assertEqual(set(step), {"n", "line", "ax", "bx", "cx", "dx", "zf"})
+                    self.assertEqual(set(step), {"n", "line", "ax", "bx", "cx", "dx", "zf", "sf", "cf"})
                 if r["end"]["type"] in ("HALT", "NOHLT", "LOOP"):
                     self.assertEqual(r["end"]["value"], len(r["steps"]))
 
@@ -41,10 +41,11 @@ class ExpectedFilesParse(unittest.TestCase):
         with open(os.path.join(ROOT_DIR, "tests", "05_jnz_loop_sum.expected.txt")) as f:
             r = parse_result(f.read())
         self.assertEqual(len(r["steps"]), 18)
-        self.assertEqual(r["steps"][5], {"n": 6, "line": 3, "ax": 9, "bx": 0, "cx": 4, "dx": 0, "zf": 0})
+        self.assertEqual(r["steps"][5], {"n": 6, "line": 3, "ax": 9, "bx": 0, "cx": 4, "dx": 0, "zf": 0, "sf": 0, "cf": 0})
         self.assertEqual(r["end"], {"type": "HALT", "value": 18})
         with open(os.path.join(ROOT_DIR, "tests", "07_negative.expected.txt")) as f:
-            self.assertEqual(parse_result(f.read())["steps"][2]["ax"], -10)
+            step3 = parse_result(f.read())["steps"][2]       # ADD AX, BX: -3 + -7
+        self.assertEqual((step3["ax"], step3["sf"], step3["cf"]), (-10, 1, 1))
 
     def test_crlf_is_accepted(self):
         r = parse_result("STATUS OK\r\nEND NOHLT 0\r\n")
@@ -56,13 +57,16 @@ class MalformedInputsRaise(unittest.TestCase):
         "empty file": "",
         "no STATUS first": "END HALT 0\n",
         "bad STATUS value": "STATUS MAYBE\nEND HALT 0\n",
-        "missing END": "STATUS OK\nSTEP 1 1 0 0 0 0 0\n",
-        "text after END": "STATUS OK\nEND HALT 0\nSTEP 1 1 0 0 0 0 0\n",
-        "ERR after STEP": "STATUS ERR\nSTEP 1 1 0 0 0 0 0\nERR 2 1\nEND ERRSTOP 2\n",
-        "STEP too short": "STATUS OK\nSTEP 1 1 0 0 0 0\nEND HALT 1\n",
-        "STEP not a number": "STATUS OK\nSTEP 1 1 X 0 0 0 0\nEND HALT 1\n",
-        "step numbers skip": "STATUS OK\nSTEP 2 1 0 0 0 0 0\nEND HALT 1\n",
-        "ZF not 0/1": "STATUS OK\nSTEP 1 1 0 0 0 0 2\nEND HALT 1\n",
+        "missing END": "STATUS OK\nSTEP 1 1 0 0 0 0 0 0 0\n",
+        "text after END": "STATUS OK\nEND HALT 0\nSTEP 1 1 0 0 0 0 0 0 0\n",
+        "ERR after STEP": "STATUS ERR\nSTEP 1 1 0 0 0 0 0 0 0\nERR 2 1\nEND ERRSTOP 2\n",
+        "STEP too short": "STATUS OK\nSTEP 1 1 0 0 0 0 0 0\nEND HALT 1\n",
+        "old 7-number STEP": "STATUS OK\nSTEP 1 1 0 0 0 0 0\nEND HALT 1\n",
+        "STEP not a number": "STATUS OK\nSTEP 1 1 X 0 0 0 0 0 0\nEND HALT 1\n",
+        "step numbers skip": "STATUS OK\nSTEP 2 1 0 0 0 0 0 0 0\nEND HALT 1\n",
+        "ZF not 0/1": "STATUS OK\nSTEP 1 1 0 0 0 0 2 0 0\nEND HALT 1\n",
+        "SF not 0/1": "STATUS OK\nSTEP 1 1 0 0 0 0 0 2 0\nEND HALT 1\n",
+        "CF not 0/1": "STATUS OK\nSTEP 1 1 0 0 0 0 0 0 -1\nEND HALT 1\n",
         "unknown END type": "STATUS OK\nEND STOP 0\n",
         "double space": "STATUS OK\nEND  HALT 0\n",
         "unknown keyword": "STATUS OK\nFOO 1\nEND HALT 0\n",

@@ -87,7 +87,7 @@ function build(s, res) {
             Arrows: jumps that were taken, with their count. Click a line to open its last run in §2.</figcaption>
         </figure>
         <section class="an-block an-t2">
-          <p class="tcaption">Table 2 — Full trace: the registers and ZF after every step.
+          <p class="tcaption">Table 2 — Full trace: the registers and flags after every step.
             Values that changed in that step are marked. Click a row to open that step in §2.</p>
           <div class="tabs trace-filters" id="traceFilters" role="radiogroup" aria-label="Filter the trace">
             <button role="radio" data-f="all" aria-checked="true">All</button>
@@ -98,7 +98,7 @@ function build(s, res) {
               <input type="number" min="1" id="tfLine" aria-label="Show only this line"></label>
           </div>
           <table class="sheet-table trace-table" id="traceTable" data-filter="all">
-            <thead><tr><th>Step</th><th>Line</th><th>Instruction</th><th>AX</th><th>BX</th><th>CX</th><th>DX</th><th>ZF</th></tr></thead>
+            <thead><tr><th>Step</th><th>Line</th><th>Instruction</th><th>AX</th><th>BX</th><th>CX</th><th>DX</th><th>ZF</th><th>SF</th><th>CF</th></tr></thead>
             <tbody>${traceRows(st)}</tbody>
           </table>
         </section>
@@ -126,7 +126,7 @@ function summaryRows(st) {
     row("Termination", end.type, where, stopRed),
     row("Lines in program / executed at least once", `${st.lines_total} / ${st.lines_executed}`),
     row("Jumps taken / not taken", `${st.jumps_taken} / ${st.jumps_not_taken}`, st.jump_kinds.join(" + ")),
-    row("ZF transitions", st.zf_transitions),
+    row("Flag transitions ZF / SF / CF", `${st.zf_transitions} / ${st.sf_transitions} / ${st.cf_transitions}`),
     row("Errors", st.errors.length, esc(errs), st.errors.length > 0),
     ...["AX", "BX", "CX", "DX"].map((r) => row(`${r} range (min → max)`, range(r), `final ${st.ranges[r].final}`)),
   ].join("");
@@ -139,15 +139,15 @@ function traceRows(st) {
   for (let k = 1; k <= st.steps; k++) {
     const changed = st.changed[k - 1];
     const line = hooks.lineOfStep(k);
-    const zfChanged = st.zf[k] !== st.zf[k - 1];
+    const flag = (f) => `<td class="mono${st[f][k] !== st[f][k - 1] ? " chg" : ""}">${st[f][k]}</td>`;
     const cell = (r) => `<td class="mono${changed.includes(r) ? " chg" : ""}">${st.values[r][k]}</td>`;
     html += `<tr data-k="${k}" data-line="${line}" data-chg="${changed.join(" ")}"${taken.has(k) ? " data-jump" : ""} tabindex="-1">` +
       `<td class="mono">${k}</td><td class="mono">L${line}</td><td class="mono">${esc((st.listing[line - 1] || "").trim())}</td>` +
       cell("AX") + cell("BX") + cell("CX") + cell("DX") +
-      `<td class="mono${zfChanged ? " chg" : ""}">${st.zf[k]}</td></tr>`;
+      flag("zf") + flag("sf") + flag("cf") + `</tr>`;
   }
   const end = st.end;
-  html += `<tr class="trace-end"><td class="mono" colspan="8">END ${end.type} ${end.value}</td></tr>`;
+  html += `<tr class="trace-end"><td class="mono" colspan="10">END ${end.type} ${end.value}</td></tr>`;
   return html;
 }
 
@@ -195,7 +195,7 @@ function drawCharts() {
     describe: (k) => {
       const v = (r) => stats.values[r][k];
       const where = k === 0 ? "start" : `L${hooks.lineOfStep(k)} ${hooks.textOfStep(k).replace(/,\s*/g, ",")}`;
-      return `t=${k} · ${where} · AX ${v("AX")} · BX ${v("BX")} · CX ${v("CX")} · DX ${v("DX")} · ZF ${stats.zf[k]}`;
+      return `t=${k} · ${where} · AX ${v("AX")} · BX ${v("BX")} · CX ${v("CX")} · DX ${v("DX")} · ZF ${stats.zf[k]} SF ${stats.sf[k]} CF ${stats.cf[k]}`;
     },
     onPick: (k) => hooks.openAt(k),
   });
