@@ -84,7 +84,8 @@ and screenshotted where MASM is not available. The header then shows a dashed re
 
 ## Using it
 
-- Type a program; **Enter** runs it at once (live mode), any other edit runs it 700 ms later.
+- Type a program: it runs by itself when you stop typing for 900 ms (live mode). Until then the
+  old results stay dimmed and the header shows "…"; the line you are typing on shows no error.
 - **RUN** animates from step 0; **STEP** / F10 one step; **RESET** back to step 0.
 - **Fig. 2 (signal trace):** click or drag to move through time; Ctrl + wheel zooms, the
   wheel scrolls, **FIT** shows all steps; ← / → step when the trace has focus. Drag its top

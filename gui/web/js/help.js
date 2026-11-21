@@ -18,7 +18,7 @@ const INSTRUCTIONS = [
 ];
 
 const SHORTCUTS = [
-  ["Enter", "New line and live run"],
+  ["Stop typing (0.9 s)", "Live run: results update by themselves"],
   ["Ctrl+Enter", "Run (animated)"],
   ["F10", "Step forward"],
   ["Shift+F10", "Step back"],

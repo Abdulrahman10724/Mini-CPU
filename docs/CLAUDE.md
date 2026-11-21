@@ -47,5 +47,7 @@ mini-cpu/
   Program = ruled notebook with red-pen errors; Fig. 1 = datapath as a textbook figure;
   execution log; Fig. 2 = signal trace (timing-diagram timeline). Hovering a register,
   line or step highlights it in every panel.
-- Live mode: Enter (or 700 ms after typing stops) re-runs CPU.exe on the whole program.
+- Live mode: CPU.exe re-runs on the whole program once the user stops typing for 900 ms
+  (every key, Enter too, restarts the timer); old results stay dimmed meanwhile.
+  Ctrl+Enter / RUN runs at once, animated.
 - Run / Step / Reset, play / pause, breakpoints (GUI only), Open / Save, demos, help.
