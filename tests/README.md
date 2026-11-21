@@ -20,7 +20,9 @@ Run on Windows after building CPU.exe:
    else 2) -> extra operand (4).
    A valid number is an optional `-` followed by digits only, so `+5` is error 5 (or 8 as
    operand 1).
-   Jump operand: not a number -> 5, outside 1..total lines -> 6.
+   Jump operand: looks like a number (starts with a digit, `-` or `+`): not a valid number
+   -> 5, outside 1..total lines -> 6. Anything else is a label name: not defined -> 10
+   (so `JMP ABC` and `JMP AX` are error 10; before labels existed they were error 5).
 4. More than 50 lines: a single `ERR 51 7`; only lines 1-50 are parsed. Running past line 50
    reaches line 51 -> `END ERRSTOP 51`. Jump range is 1..50.
 5. MOV and jumps never change ZF. ADD/SUB/INC/DEC set ZF = (result == 0). ZF starts at 0.
@@ -30,3 +32,17 @@ Run on Windows after building CPU.exe:
 9. Arithmetic wraps around like a real 32-bit CPU (two's complement), with no error:
    `2147483647 + 1 = -2147483648`. CMP sets ZF = 1 exactly when both values are equal.
 10. If HLT runs as step 500, the result is `END HALT 500` (HLT is checked before the guard).
+11. Labels (CONTRACT.md appendix A), two passes:
+    - Pass 1 looks only at the FIRST word of every line. If it ends with `:` it is a label;
+      `NAME:` is removed from the line and the rest is parsed normally. `L1:ADD AX, CX`
+      (no space) also works.
+    - A label alone on a line makes it an empty line (no STEP). A jump to it continues
+      with the next line; to a label alone on the LAST line -> `END NOHLT`.
+    - Name check (error 12): 1-12 chars, letters/digits/`_`, starts with a letter, not an
+      opcode or register name. Case-insensitive (`skip:` = `SKIP:`). `: HLT` (no name) -> 12.
+    - Duplicate (error 11): reported on the SECOND definition; the first one stays valid.
+    - A second label on the same line (`X: Y: MOV BX, 2`) -> 12; the first label (`X`) is
+      still defined.
+    - A line with a label error is not parsed further (one error per line).
+    - Labels are only jump targets: `MOV AX, L1` -> 2, as any non-register word.
+    - Unused labels are fine (no error). Jumps still accept line numbers (`JNZ 3`).

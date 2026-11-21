@@ -8,7 +8,7 @@ when it is started with --mock, never as an automatic fallback, and then shows a
 "MOCK ENGINE" badge.
 
 It follows CONTRACT.md + tests/README.md and must produce byte-identical result.txt
-files, so it passes the same 25 tests:  python tests/run_tests.py --mock
+files, so it passes the same tests:  python tests/run_tests.py --mock
 
 Usage (like CPU.exe): run it in a folder that contains program.txt; it writes result.txt.
 """
@@ -69,8 +69,36 @@ def looks_like_number(word):
     return word[0] in "-+0123456789"
 
 
-def parse_line(line, line_count):
-    """Return None (empty), an int error code, or (op, dst, src_type, src)."""
+def valid_label(name):
+    """1-12 chars, letters/digits/_, starts with a letter, not an opcode or register."""
+    return (re.fullmatch(r"[A-Z][A-Z0-9_]{0,11}", name) is not None
+            and name not in OPS and name not in REGS)
+
+
+def collect_labels(lines):
+    """PASS 1 (like CollectLabels): find "NAME:" at the start of each line, erase it from
+    the line, and build the symbol table {name: line}. Returns (lines, table, errors)."""
+    table, errors, out = {}, {}, []
+    for number, text in enumerate(lines, 1):
+        m = re.match(r" *([^ ,:]*):", text)          # first word ends with ':'
+        if not m:
+            out.append(text)
+            continue
+        name, rest = m.group(1), text[m.end():]
+        out.append(" " * m.end() + rest)              # the label is erased (spaces)
+        if not valid_label(name):
+            errors[number] = 12
+        elif name in table:
+            errors[number] = 11                       # duplicate: error on the 2nd one
+        else:
+            table[name] = number
+            if ":" in rest:
+                errors[number] = 12                   # a second label on the same line
+    return out, table, errors
+
+
+def parse_line(line, line_count, labels):
+    """PASS 2. Return None (empty), an int error code, or (op, dst, src_type, src)."""
     tokens, count = tokenize(line)
     if count == 0:
         return None
@@ -82,11 +110,16 @@ def parse_line(line, line_count):
         return 3
     dst, src_type, src = 0, 0, 0
     if 7 <= op <= 9:                                   # jumps
-        target = str_to_int(tokens[1])
-        if target is None:
-            return 5
-        if not 1 <= target <= line_count:
-            return 6
+        if not looks_like_number(tokens[1]):              # a label name
+            if tokens[1] not in labels:
+                return 10
+            target = labels[tokens[1]]
+        else:
+            target = str_to_int(tokens[1])
+            if target is None:
+                return 5
+            if not 1 <= target <= line_count:
+                return 6
         src_type, src = 2, target
     elif op <= 6:                                      # first operand = register
         if tokens[1] not in REGS:
@@ -115,9 +148,13 @@ def simulate(program_path):
     with open(program_path, "rb") as f:
         lines, too_many = split_lines(f.read()[:4096])
     n = len(lines)
-    errors, program = {}, []
-    for number, text in enumerate(lines, 1):
-        parsed = parse_line(text, n)
+    lines, labels, errors = collect_labels(lines)       # pass 1
+    program = []
+    for number, text in enumerate(lines, 1):            # pass 2
+        if number in errors:                            # bad label: line not parsed
+            program.append(None)
+            continue
+        parsed = parse_line(text, n, labels)
         if isinstance(parsed, int):
             errors[number] = parsed
             parsed = None
