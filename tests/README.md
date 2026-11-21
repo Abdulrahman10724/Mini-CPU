@@ -50,3 +50,12 @@ Run on Windows after building CPU.exe:
     - Labels are only jump targets: `MOV AX, L1` -> 2, as any non-register word.
       All seven jumps (JMP JZ JNZ JS JNS JC JNC) take a line number or a label.
     - Unused labels are fine (no error). Jumps still accept line numbers (`JNZ 3`).
+12. Odd input never crashes CPU.exe (tests 41-51):
+    - A UTF-8 BOM (EF BB BF) at the start of the file is skipped (Notepad "UTF-8 with BOM").
+    - Only the first 4096 bytes are read; lines keep their first 63 characters.
+    - A NUL byte ends the stored line (lines are 0-terminated strings).
+    - Only `a`..`z` are uppercased; other bytes (Urdu, accents, binary) stay as they are and
+      give error 1 (instruction), 2 (operand) or 12 (label).
+    - There are no comments: `; text` is error 1, `MOV BX, 2 ; text` is error 4.
+    - `0x10` and `5.5` are error 5; `MOV AX,,` is error 3; `L1: JMP L1` stops with `END LOOP 500`.
+

@@ -1,0 +1,5 @@
+MOV AX, 1
+یہ ایک پروگرام ہے
+MOV BX, ٥
+ÄX: INC AX
+HLT
