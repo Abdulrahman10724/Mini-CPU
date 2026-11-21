@@ -5,9 +5,14 @@ This is NOT CPU logic: CPU.exe already ran the program and wrote every step to
 result.txt. Here we only COUNT and SUMMARISE that data (how many steps, which lines
 ran how often, which jumps were taken, min/max of each register, ...).
 The instruction name of a step is the first word of its source line (display only).
+A label in front of it ("L1: ADD AX, CX") is skipped; a jump to a label is matched with
+the line that label is on, read from the program text (CPU.exe already did the real
+look-up; result.txt only has line numbers).
 
     compute(result, code) -> dict      result = result_parser.parse_result(...)
 """
+
+import re
 
 REGS = ["AX", "BX", "CX", "DX"]
 JUMPS = ("JMP", "JZ", "JNZ")
@@ -15,14 +20,34 @@ CATEGORY = {"MOV": "data", "ADD": "arith", "SUB": "arith", "INC": "arith", "DEC"
             "CMP": "compare", "JMP": "control", "JZ": "control", "JNZ": "control", "HLT": "control"}
 
 
+LABEL_AT_START = re.compile(r"\s*([^\s,:]*):")
+
+
+def _split_label(text):
+    """("L1", " ADD AX, CX") for "L1: ADD AX, CX"; (None, text) without a label."""
+    m = LABEL_AT_START.match(text)
+    return (m.group(1).upper(), text[m.end():]) if m else (None, text)
+
+
 def _words(text):
-    return text.replace(",", " ").upper().split()
+    return _split_label(text)[1].replace(",", " ").upper().split()
+
+
+def _labels(lines):
+    """NAME -> line number (the first definition, like CPU.asm)."""
+    table = {}
+    for no, text in enumerate(lines, 1):
+        name = _split_label(text)[0]
+        if name and name not in table:
+            table[name] = no
+    return table
 
 
 def compute(result, code):
     lines = code.replace("\r\n", "\n").split("\n")
     if lines and lines[-1] == "":
         lines.pop()                                   # a final newline adds no line (like CPU.exe)
+    labels = _labels(lines)
     steps = result["steps"]
     n = len(steps)
     end = result["end"]
@@ -33,6 +58,14 @@ def compute(result, code):
 
     def line_text(no):
         return lines[no - 1].strip() if 1 <= no <= len(lines) else ""
+
+    def landing(no):
+        """Where execution really continues after going to line `no`: empty lines (and
+        label-only lines) produce no STEP, so it is the first non-empty line from `no`
+        on, or None when that runs past the last line."""
+        while 1 <= no <= len(lines) and not _words(lines[no - 1]):
+            no += 1
+        return no if 1 <= no <= len(lines) else None
 
     def next_line(k):                                 # the line that ran after step k (1-based)
         if k < n:
@@ -53,10 +86,17 @@ def compute(result, code):
         mix[op] = mix.get(op, 0) + 1
         if op in JUMPS:
             jump_kinds.add(op)
-            target = int(words[1]) if len(words) > 1 and words[1].lstrip("-").isdigit() else None
+            target = None
+            if len(words) > 1:
+                target = int(words[1]) if words[1].lstrip("-").isdigit() else labels.get(words[1])
             if next_line(k) is None and end["type"] == "LOOP":
                 continue                  # stopped by the 500-step guard: outcome not recorded
-            if target is not None and next_line(k) == target:      # it went to the target
+            goes_to = landing(target) if target is not None else None
+            falls_to = landing(st["line"] + 1)
+            # taken = it went where the target leads. If target and fall-through lead to
+            # the same line (e.g. "JZ 5" on line 4), only JMP counts as taken.
+            same = goes_to == falls_to
+            if target is not None and next_line(k) == goes_to and (not same or op == "JMP"):
                 jumps_taken += 1
                 taken_steps.append(k)
                 key = (st["line"], target)
@@ -72,7 +112,7 @@ def compute(result, code):
         "steps": n,
         "end": end,
         "stop_line": stop_line,
-        "lines_total": sum(1 for t in lines if t.strip()),
+        "lines_total": sum(1 for t in lines if _words(t)),     # a label alone is an empty line
         "lines_executed": len(line_counts),
         "jumps_taken": jumps_taken,
         "jumps_not_taken": jumps_not_taken,

@@ -6,7 +6,7 @@
 // Enter too, restarts the timer). While waiting, the old results stay visible but
 // dimmed, and the line being typed shows no error. The run itself is in main.js.
 
-import { state, stateAt, describeStep, errorOnLine, indexes, REG_NAMES } from "./state.js";
+import { state, stateAt, describeStep, errorOnLine, indexes, REG_NAMES, splitLabel, labelsIn, words } from "./state.js";
 import { errorInfo } from "./errors.js";
 import { penStrokes } from "./pen.js";
 
@@ -29,11 +29,13 @@ const drawnPens = new Set(); // red-pen marks already animated once (no re-anima
 // Ink weight only. Whether a line is valid is decided by CPU.exe, never here.
 // Registers also get "reg-AX" etc. so linked highlighting can find every AX.
 CodeMirror.defineMode("minicpu", () => ({
-  startState: () => ({ word: 0 }),
+  startState: () => ({ word: 0, label: false }),
   token(stream, st) {
-    if (stream.sol()) st.word = 0;
+    if (stream.sol()) { st.word = 0; st.label = false; }
     if (stream.eatSpace()) return null;
     if (stream.eat(",")) return "comma";
+    // a label at the start of the line ("L1:"), ink italic with its colon
+    if (st.word === 0 && !st.label && stream.match(/^[^\s,:]*:/)) { st.label = true; return "label"; }
     const w = stream.match(/^[^\s,]+/)[0].toUpperCase();
     st.word += 1;
     if (st.word === 1 && OPCODES.includes(w)) return "opcode";
@@ -266,11 +268,21 @@ const OPERANDS = { MOV: 2, ADD: 2, SUB: 2, CMP: 2, INC: 1, DEC: 1, JMP: 1, JZ: 1
 // The character range to circle: { s, e } (e exclusive), or { s, dot: true } for a
 // small circle (missing operand: at the end of the line).
 function penTarget(text, code) {
-  const words = [...text.matchAll(/[^\s,]+/g)].map((m) => ({ s: m.index, e: m.index + m[0].length, w: m[0].toUpperCase() }));
-  if (words.length === 0) return null;
+  const { rest, restStart } = splitLabel(text);
+  const labelBox = restStart ? { s: text.search(/\S/), e: restStart } : null;   // "L1:" incl. colon
+  const words = [...rest.matchAll(/[^\s,]+/g)].map((m) => ({ s: restStart + m.index, e: restStart + m.index + m[0].length, w: m[0].toUpperCase() }));
+  if (code === 12 && labelBox) {                     // bad name, or a second label ("X: Y:")
+    const name = text.slice(labelBox.s, labelBox.e - 1).toUpperCase();
+    const nameOk = /^[A-Z][A-Z0-9_]{0,11}$/.test(name) && !OPCODES.includes(name) && !REG_NAMES.includes(name);
+    const second = words.find((w) => w.w.includes(":"));
+    return nameOk && second ? second : labelBox;
+  }
+  if (code === 11 && labelBox) return labelBox;      // duplicate: circle the label
+  if (words.length === 0) return labelBox;
   const whole = { s: words[0].s, e: words[words.length - 1].e };
   const isJump = ["JMP", "JZ", "JNZ"].includes(words[0].w);
   switch (code) {
+    case 10: return words[1] || whole;                                   // the undefined label
     case 1: return words[0];                                             // unknown opcode
     case 8: return words[1] || whole;                                    // first operand not a register
     case 2: return words[1] && !REG_NAMES.includes(words[1].w) ? words[1] : words[2] || whole;
@@ -348,7 +360,8 @@ function onHover(e) {
 
   const code = errorOnLine(hit.line);
   if (code) {
-    const info = errorInfo(code);
+    const labels = labelsIn(cm.getValue());
+    const info = errorInfo(code, { labelUsed: words(cm.getLine(hit.line - 1)).slice(1).some((w) => labels.has(w)) });
     showSlip(e, hit.box,
       `<div class="slip-head"><b class="slip-code">E${code}</b> ${info.message}</div>` +
       `<div class="slip-hint">${info.hint}</div>`);

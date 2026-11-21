@@ -20,7 +20,7 @@ const ORDERS = [
   ["MCPU-NEW", "Blank program", "OPEN", { act: "new" }],
   ["MCPU-D01", "Demo · Arithmetic (MOV, ADD, SUB)", "OPEN", { act: "demo", id: "01_arithmetic" }],
   ["MCPU-D02", "Demo · Compare & jump (CMP, JZ)", "OPEN", { act: "demo", id: "02_compare_jump" }],
-  ["MCPU-D03", "Demo · Loop sum 5+4+3+2+1 (DEC, JNZ)", "OPEN", { act: "demo", id: "03_loop_sum" }],
+  ["MCPU-D03", "Demo · Loop sum 5+4+3+2+1 (label L1, JNZ)", "OPEN", { act: "demo", id: "03_loop_sum" }],
   ["MCPU-FILE", "Open a .txt program from disk…", "BROWSE", { act: "file" }],
 ];
 

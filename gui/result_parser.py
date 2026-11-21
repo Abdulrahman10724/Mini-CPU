@@ -65,7 +65,7 @@ def parse_result(text):
                 raise ResultFormatError(f"line {line_no}: bad or misplaced ERR line")
             err = {"line": _int(fields[1], line_no, "line"),
                    "code": _int(fields[2], line_no, "error code")}
-            if not 1 <= err["code"] <= 9:
+            if not 1 <= err["code"] <= 12:
                 raise ResultFormatError(f"line {line_no}: unknown error code {err['code']}")
             if result["errors"] and err["line"] <= result["errors"][-1]["line"]:
                 raise ResultFormatError(f"line {line_no}: ERR lines must be in ascending order")

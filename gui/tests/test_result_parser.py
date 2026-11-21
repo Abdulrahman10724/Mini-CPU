@@ -68,7 +68,7 @@ class MalformedInputsRaise(unittest.TestCase):
         "unknown keyword": "STATUS OK\nFOO 1\nEND HALT 0\n",
         "STATUS ERR without ERR": "STATUS ERR\nEND HALT 0\n",
         "ERR lines not ascending": "STATUS ERR\nERR 3 1\nERR 2 1\nEND ERRSTOP 2\n",
-        "unknown error code": "STATUS ERR\nERR 1 12\nEND ERRSTOP 1\n",
+        "unknown error code": "STATUS ERR\nERR 1 13\nEND ERRSTOP 1\n",
         "two STATUS lines": "STATUS OK\nSTATUS OK\nEND HALT 0\n",
     }
 
