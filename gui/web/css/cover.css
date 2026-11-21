@@ -1,29 +1,25 @@
-/* cover.css - §1 COVER, the datasheet's front page. */
+/* cover.css - COVER, the datasheet's front page. */
 
 .page-cover { overflow-y: auto; }
+/* two columns between the same top and bottom lines (the header rule and the footer rule) */
 .cover-grid {
-  height: 100%; min-height: 640px;          /* fits 1280x800 and up; scrolls below that */
-  display: grid; grid-template-columns: 45% minmax(0, 1fr); column-gap: 48px;
-  padding: 22px 0 14px;
+  height: 100%; min-height: 600px;          /* fits 1366x768 and up; scrolls below that */
+  display: grid; grid-template-columns: minmax(0, 46%) minmax(0, 1fr); column-gap: 56px;
+  padding: 20px 0 16px;
 }
 
-/* ---------------------------------------------------------------- left: title, features, ordering */
-.cover-left { display: flex; flex-direction: column; min-width: 0; }
+/* ---------------------------------------------------------------- left: title + ordering, centred */
+.cover-left { display: flex; flex-direction: column; justify-content: center; min-width: 0; padding-bottom: 12px; }
 .advance { margin: 0 0 10px; font: 500 11px/1 var(--font-mono); letter-spacing: .1em; color: var(--ink-2); }
 .cover-title {
-  margin: 0; font: 600 72px/0.95 var(--font-ui); letter-spacing: -0.02em; color: var(--ink);
+  margin: 0; font: 600 clamp(60px, 11vh, 112px)/0.95 var(--font-ui); letter-spacing: -0.02em; color: var(--ink);
 }
-.cover-sub { margin: 10px 0 14px; font: italic 400 20px/1.3 var(--font-serif); color: var(--ink-2); }
+.cover-sub { margin: 10px 0 14px; font: italic 400 clamp(18px, 2.4vh, 22px)/1.3 var(--font-serif); color: var(--ink-2); }
 .double-rule { height: 4px; border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink); }
 
-.cover-sec { margin-top: 18px; }
+/* the left group grows with the window height, so it spans the same height as the chip column */
+.cover-sec { margin-top: clamp(18px, 4vh, 44px); }
 .cover-head { padding-top: 8px; border-top: 1px solid var(--ink); margin-bottom: 8px; }
-.features { margin: 0; padding: 0; list-style: none; }
-.features li {
-  position: relative; padding: 3px 0 3px 18px;
-  font: 400 15px/1.45 var(--font-ui); color: var(--ink);
-}
-.features li::before { content: "■"; position: absolute; left: 0; top: 5px; font-size: 9px; color: var(--ink); }
 
 /* ordering information: a ruled table, each row is an action */
 .ordering { position: relative; }
@@ -32,13 +28,13 @@
   text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--ink);
   font: 600 10px/1 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
 }
-.order-table td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
+.order-table td { padding: clamp(7px, 1.6vh, 16px) 8px clamp(7px, 1.6vh, 16px) 0; border-bottom: 1px solid var(--rule); vertical-align: middle; }
 .order-table tbody tr { cursor: pointer; outline: none; }
 .order-table tbody tr:hover, .order-table tbody tr:focus-visible { background: var(--paper-3); }
 .order-table tbody tr:focus-visible { box-shadow: inset 2px 0 0 var(--spot); }
 .order-table .part { width: 104px; padding-left: 6px; font: 600 12.5px/1 var(--font-mono); color: var(--ink); }
 .order-table tr:hover .part, .order-table tr:focus-visible .part { color: var(--spot-text); }
-.order-table .desc { font: 400 14px/1.35 var(--font-ui); color: var(--ink); }
+.order-table .desc { font: 400 clamp(14px, 1.8vh, 16px)/1.35 var(--font-ui); color: var(--ink); }
 .order-table .go { width: 92px; text-align: right; white-space: nowrap;
   font: 600 11.5px/1 var(--font-ui); letter-spacing: .08em; color: var(--ink); }
 .order-table .arrow { display: inline-block; transition: transform .15s; }
@@ -65,9 +61,6 @@
 .drawing-block th { width: 104px; font-weight: 500; font-size: 10.5px; letter-spacing: .06em; color: var(--ink-3); }
 .drawing-block .tb-title { font-weight: 600; font-size: 13px; letter-spacing: .04em; }
 .drawing-block .tb-side { width: 84px; white-space: nowrap; }
-.tb-engine { padding: 0; border: 0; background: none; cursor: default; font: inherit; color: var(--ink); text-align: left; }
-.tb-engine[data-state="missing"] { color: var(--spot-text); cursor: pointer; text-decoration: underline; }
-.tb-engine[data-state="mock"] { color: var(--spot-text); }
 
 /* ---------------------------------------------------------------- Fig. 0: the DIP-40 chip */
 #chip text { font-family: var(--font-mono); fill: var(--ink); }
@@ -102,13 +95,8 @@
 #chip.zooming { transition: transform .4s ease-in, opacity .4s ease-in; transform: scale(2.4); opacity: 0;
   transform-origin: 50% 47%; }
 
-/* short windows (e.g. 1280x800): tighten the left column so the whole sheet fits */
+/* short windows (e.g. 1366x768): a little less air so the chip keeps its size */
 @media (max-height: 860px) {
-  .cover-grid { padding-top: 14px; }
-  .cover-title { font-size: 60px; }
-  .cover-sub { margin: 6px 0 10px; font-size: 18px; }
-  .cover-sec { margin-top: 12px; }
-  .features li { padding: 1px 0 1px 18px; font-size: 14px; }
-  .order-table td { padding-top: 6px; padding-bottom: 6px; }
-  .drawing-block td { padding-top: 2px; padding-bottom: 2px; }
+  .cover-grid { padding: 14px 0 12px; }
+  .drawing-block th, .drawing-block td { padding-top: 2px; padding-bottom: 2px; }
 }
