@@ -446,5 +446,7 @@ export function renderDatapathText(s) {
     cur.textContent = "";
     live.textContent = r ? "Ready. Step 0." : "";
   }
-  document.getElementById("dpCaption").hidden = s.code.trim() !== "" || s.engine.state === "missing";
+  document.getElementById("dpCaption").textContent = s.code.trim() === ""
+    ? "Write an instruction and press Enter."
+    : "Fig. 1 — Mini-CPU datapath. Active paths drawn heavy; data in red.";
 }

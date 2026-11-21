@@ -1,71 +1,57 @@
-/* tokens.css - every colour, font and size used by the GUI.
-   Shared by all pages (editor now; home and analysis later). Use only these. */
+/* tokens.css - the "1978 CPU datasheet" design system.
+   Printed paper, black ink, ONE spot colour. Every colour, font and size lives here.
+   Shared by all pages (editor now; home and analysis later). */
 
-@font-face { font-family: "Space Grotesk"; font-weight: 400; font-display: block;
-  src: url("../fonts/space-grotesk/space-grotesk-latin-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "Space Grotesk"; font-weight: 500; font-display: block;
-  src: url("../fonts/space-grotesk/space-grotesk-latin-500-normal.woff2") format("woff2"); }
-@font-face { font-family: "Space Grotesk"; font-weight: 600; font-display: block;
-  src: url("../fonts/space-grotesk/space-grotesk-latin-600-normal.woff2") format("woff2"); }
-@font-face { font-family: "Space Grotesk"; font-weight: 700; font-display: block;
-  src: url("../fonts/space-grotesk/space-grotesk-latin-700-normal.woff2") format("woff2"); }
-@font-face { font-family: "JetBrains Mono"; font-weight: 400; font-display: block;
-  src: url("../fonts/jetbrains-mono/jetbrains-mono-latin-400-normal.woff2") format("woff2"); }
-@font-face { font-family: "JetBrains Mono"; font-weight: 500; font-display: block;
-  src: url("../fonts/jetbrains-mono/jetbrains-mono-latin-500-normal.woff2") format("woff2"); }
-@font-face { font-family: "JetBrains Mono"; font-weight: 600; font-display: block;
-  src: url("../fonts/jetbrains-mono/jetbrains-mono-latin-600-normal.woff2") format("woff2"); }
-@font-face { font-family: "JetBrains Mono"; font-weight: 700; font-display: block;
-  src: url("../fonts/jetbrains-mono/jetbrains-mono-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400; font-display: block;
+  src: url("../fonts/ibm-plex-sans/ibm-plex-sans-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 500; font-display: block;
+  src: url("../fonts/ibm-plex-sans/ibm-plex-sans-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 600; font-display: block;
+  src: url("../fonts/ibm-plex-sans/ibm-plex-sans-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 400; font-display: block;
+  src: url("../fonts/ibm-plex-mono/ibm-plex-mono-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 500; font-display: block;
+  src: url("../fonts/ibm-plex-mono/ibm-plex-mono-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 600; font-display: block;
+  src: url("../fonts/ibm-plex-mono/ibm-plex-mono-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Serif"; font-weight: 400; font-style: italic; font-display: block;
+  src: url("../fonts/ibm-plex-serif/ibm-plex-serif-latin-400-italic.woff2") format("woff2"); }
 
 :root {
-  /* surfaces */
-  --bg:        #0A0F1C;   /* app background */
-  --grid-dot:  #1A2340;   /* dot grid on the background */
-  --panel:     #0F1628;   /* panels */
-  --panel-2:   #141D33;   /* raised elements inside panels */
-  --line:      #223052;   /* borders, idle wires */
-  --line-2:    #2E3F68;   /* hovered borders */
+  /* paper */
+  --paper:     #F3EFE6;   /* page background (warm off-white) */
+  --paper-2:   #EBE5D8;   /* inset areas: editor body, waveform plot */
+  --paper-3:   #E2DACA;   /* hover / pressed fill */
 
-  /* text */
-  --text:      #E6ECF8;
-  --muted:     #8592B0;
-  --faint:     #56627F;
+  /* ink */
+  --ink:       #1B1A17;   /* primary text, all diagram strokes */
+  --ink-2:     #4B4740;   /* secondary text */
+  --ink-3:     #5F584E;   /* captions, labels, line numbers. Brief value #857E71 was
+                             darkened: it gave only 3.2:1 on paper-2; this is >= 4.9:1 */
+  --rule:      #C8BFAD;   /* hairlines, table rules, idle wires */
 
-  /* accents: each one has a single meaning */
-  --cyan:      #22D3EE;   /* active data, primary action, fetch */
-  --orange:    #FB923C;   /* ALU */
-  --purple:    #A78BFA;   /* registers */
-  --amber:     #FBBF24;   /* program counter, jumps, control flow */
-  --green:     #4ADE80;   /* ZF = 1, OK, HALT */
-  --red:       #F87171;   /* errors, ERRSTOP */
-
-  /* 12% "washes" for backgrounds */
-  --cyan-wash:   rgba(34, 211, 238, 0.12);
-  --orange-wash: rgba(251, 146, 60, 0.12);
-  --purple-wash: rgba(167, 139, 250, 0.12);
-  --amber-wash:  rgba(251, 191, 36, 0.12);
-  --green-wash:  rgba(74, 222, 128, 0.12);
-  --red-wash:    rgba(248, 113, 113, 0.12);
+  /* the ONE accent: moving data, the current step, errors, the cursor */
+  --spot:      #D9480F;   /* strokes and marks */
+  --spot-text: #A1360A;   /* same red, darker: red TEXT and data labels (>= 4.85:1) */
+  --spot-wash: rgba(217, 72, 15, 0.10);
 
   /* type */
-  --font-ui:   "Space Grotesk", system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --font-ui:    "IBM Plex Sans", "Segoe UI", sans-serif;
+  --font-mono:  "IBM Plex Mono", Consolas, monospace;
+  --font-serif: "IBM Plex Serif", Georgia, serif;   /* italic only: captions, subtitle */
   --fs-ui: 13px;
-  --fs-title: 12px;
   --fs-code: 14px;
-  --lh-code: 22px;
+  --lh-code: 24px;        /* also the spacing of the notebook rules */
 
   /* layout */
-  --gap: 12px;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --topbar-h: 56px;
-  --timeline-h: 72px;
-  --history-w: 280px;
+  --page-pad: 16px;
+  --header-h: 64px;
+  --log-w: 300px;
+  --trace-h: 240px;       /* resizable 180..400 (waveform.js) */
+  --radius: 0;
+  --radius-btn: 2px;
 
-  /* the only glow allowed: active wires, pulses, lit ZF LED */
-  --glow-cyan:  drop-shadow(0 0 6px var(--cyan));
-  --glow-amber: drop-shadow(0 0 6px var(--amber));
-  --glow-green: drop-shadow(0 0 6px var(--green));
+  /* strokes */
+  --stroke: 1.5px;        /* diagram outlines */
+  --stroke-active: 3px;   /* a wire carrying data right now */
 }
