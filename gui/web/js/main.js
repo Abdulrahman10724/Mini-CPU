@@ -10,6 +10,7 @@ import { initEditor, renderEditor, setCode, cancelLiveRun, insertLine, setLinked
 import { buildDatapath, showState, renderDatapathText, setRegWires, setImemHover } from "./datapath.js";
 import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
 import { errorInfo } from "./errors.js";
+import { confirmDialog } from "./dialog.js";
 import { initHistory, renderHistory, markLineRows } from "./history.js";
 import { initWaveform, renderWaveform, setTraceLink, previewStep } from "./waveform.js";
 import { initHelp, renderHelp } from "./help.js";
@@ -224,8 +225,9 @@ function renderTopBar(s, patch) {
   }
 }
 
-function confirmDiscard() {
-  return !state.dirty || window.confirm("You have unsaved changes. Discard them?");
+// Ask before throwing away unsaved changes (a paper-slip dialog, not window.confirm).
+async function confirmDiscard() {
+  return !state.dirty || confirmDialog("This program has unsaved changes. Discard them?");
 }
 
 function loadProgram(code, fileName, filePath) {
@@ -237,7 +239,7 @@ function loadProgram(code, fileName, filePath) {
 }
 
 async function openFile() {
-  if (!confirmDiscard()) return;
+  if (!(await confirmDiscard())) return;
   const res = await api.openFile();
   if (res.ok) loadProgram(res.code.replace(/\r\n?/g, "\n"), res.name, res.path);
   else if (!res.cancelled) toast(res.error, "red");
@@ -262,7 +264,7 @@ async function buildDemosMenu() {
     item.children[1].textContent = d.description;
     item.addEventListener("click", async () => {
       closeDemos();
-      if (!confirmDiscard()) return;
+      if (!(await confirmDiscard())) return;
       const res = await api.loadDemo(d.id);
       if (res.ok) loadProgram(res.code, d.id + ".txt", null);
     });
@@ -308,6 +310,7 @@ function inEditor(e) {
 }
 
 function onKeyDown(e) {
+  if (!$("dialog").hidden) return;                 // a dialog handles its own keys
   const ctrl = e.ctrlKey || e.metaKey;
   const typing = inEditor(e) || ["INPUT", "TEXTAREA"].includes(e.target.tagName);
   let handled = true;

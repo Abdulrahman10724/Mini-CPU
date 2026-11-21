@@ -1,5 +1,6 @@
-// toast.js - one small message at a time, bottom right.
-// tone: "green" | "amber" | "red" | "" ; sticky toasts stay until closed.
+// toast.js - one small paper slip at a time, bottom right.
+// tone "red" = an error (red rule on the left); anything else is plain ink.
+// Sticky toasts stay until closed.
 
 let current = null;
 let timer = null;
@@ -10,7 +11,7 @@ export function toast(message, tone = "", { sticky = false } = {}) {
   if (current) current.remove();
 
   const el = document.createElement("div");
-  el.className = "toast" + (tone ? " toast-" + tone : "");
+  el.className = "slip toast" + (tone === "red" ? " toast-red" : "");
   el.setAttribute("role", tone === "red" ? "alert" : "status");
   const text = document.createElement("span");
   text.textContent = message;
@@ -18,7 +19,7 @@ export function toast(message, tone = "", { sticky = false } = {}) {
 
   if (sticky) {
     const close = document.createElement("button");
-    close.className = "btn-icon toast-close";
+    close.className = "ctl-icon toast-close";
     close.setAttribute("aria-label", "Dismiss");
     close.innerHTML = '<svg class="icon"><use href="#i-close"/></svg>';
     close.addEventListener("click", () => el.remove());

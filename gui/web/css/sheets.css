@@ -38,3 +38,50 @@
   font: 600 11px/1.2 var(--font-mono); letter-spacing: .06em; color: var(--ink); }
 .end-tag.end-red { border-color: var(--spot); color: var(--spot-text); }
 .empty-note { margin: 24px 0; text-align: center; font: italic 400 13px/1.4 var(--font-serif); color: var(--ink-2); }
+
+/* ---------------------------------------------------------------- help: appendix pages */
+.help-sheet {
+  position: absolute; z-index: 30; top: calc(var(--header-h) + 14px); right: 24px;
+  bottom: calc(var(--trace-h) + 30px); width: 460px;
+  display: flex; flex-direction: column; padding: 0 18px 0;
+  background: var(--paper); border: 1px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
+}
+.help-sheet .sec-head { border-top: 0; border-bottom: 4px double var(--ink); }
+#helpClose { margin-left: auto; }
+.help-body { flex: 1; overflow-y: auto; padding: 4px 0 20px; }
+.appendix {
+  margin: 18px 0 8px; padding-top: 8px; border-top: 1px solid var(--ink);
+  font: italic 400 15px/1.3 var(--font-serif); color: var(--ink);
+}
+.sheet-table { width: 100%; border-collapse: collapse; font: 400 12px/1.45 var(--font-ui); color: var(--ink-2); }
+.sheet-table th { text-align: left; padding: 4px 6px 4px 0; border-bottom: 1px solid var(--ink);
+  font: 600 10px/1.2 var(--font-ui); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+.sheet-table td { padding: 6px 6px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.sheet-table td.mono { font-family: var(--font-mono); color: var(--ink); white-space: nowrap; }
+.sheet-table td.code { color: var(--spot-text); font-weight: 600; }
+.sheet-table b { color: var(--ink); font-weight: 600; }
+.insert { height: 22px; padding: 0 2px; font-size: 11px; color: var(--ink-2); }
+.insert:hover { color: var(--ink); }
+
+/* ---------------------------------------------------------------- toasts: paper slips */
+.toast-host { position: absolute; z-index: 80; right: 24px; bottom: calc(var(--trace-h) + 28px); }
+.toast { display: flex; align-items: center; gap: 10px; max-width: 440px; padding: 8px 12px;
+  font: 500 12px/1.4 var(--font-mono); animation: slip-in .18s ease-out; }
+.toast-red { border-left: 4px solid var(--spot); color: var(--spot-text); }
+.toast-close { width: 24px; height: 24px; color: var(--ink); }
+@keyframes slip-in { from { transform: translateY(6px); opacity: 0; } }
+
+/* ---------------------------------------------------------------- confirm dialog */
+.dialog-backdrop { position: absolute; inset: 0; z-index: 90; display: grid; place-items: center;
+  background: rgba(27, 26, 23, .12); }
+.dialog { width: 380px; padding: 16px 18px 14px; font: 400 13px/1.5 var(--font-ui); }
+.dialog p { margin: 0 0 14px; color: var(--ink); }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.btn-outline.danger { border-color: var(--spot); color: var(--spot-text); }
+
+/* ---------------------------------------------------------------- engine popover / missing slip */
+.popover h3, .engine-card h3 { margin: 0 0 6px; font: 600 14px/1.3 var(--font-ui); }
+.popover p, .popover li, .engine-card p, .engine-card li { margin: 0 0 8px; font: 400 12.5px/1.55 var(--font-ui); color: var(--ink-2); }
+.popover ol, .engine-card ol { margin: 0 0 12px; padding-left: 18px; }
+.popover code, .engine-card code { font: 500 12px var(--font-mono); color: var(--ink); }
+.engine-card h3 { color: var(--spot-text); }

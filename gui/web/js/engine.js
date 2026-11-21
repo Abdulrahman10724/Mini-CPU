@@ -40,7 +40,7 @@ export function closeEnginePopover() {
 
 function retryButton() {
   const b = document.createElement("button");
-  b.className = "btn btn-outline";
+  b.className = "btn-outline";
   b.textContent = "Retry";
   b.addEventListener("click", hooks.onRetry);
   return b;
@@ -53,10 +53,10 @@ export function renderEngine(s, patch) {
   const card = $("engineCard");
 
   if (st === "missing") {
-    pop.innerHTML = `<h3>CPU engine not found</h3><p>The GUI runs <code>CPU.exe</code> to check and run your
+    pop.innerHTML = `<h3>CPU engine missing</h3><p>The GUI runs <code>CPU.exe</code> to check and run your
       program. Point it to the exe in one of these ways:</p>${HOW_TO_FIX}`;
     pop.append(retryButton());
-    card.innerHTML = `<h3>CPU engine not found</h3><p>The simulator needs <code>CPU.exe</code>, built from
+    card.innerHTML = `<h3>CPU engine missing</h3><p>The simulator needs <code>CPU.exe</code>, built from
       <code>asm/CPU.asm</code> in Visual Studio.</p>${HOW_TO_FIX}`;
     card.append(retryButton());
   } else if (st === "mock") {
