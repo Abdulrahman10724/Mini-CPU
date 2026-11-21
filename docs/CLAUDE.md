@@ -51,3 +51,5 @@ mini-cpu/
   (every key, Enter too, restarts the timer); old results stay dimmed meanwhile.
   Ctrl+Enter / RUN runs at once, animated.
 - Run / Step / Reset, play / pause, breakpoints (GUI only), Open / Save, demos, help.
+- Labels (`L1: ...`, `JNZ L1`) are resolved by CPU.asm in two passes (CONTRACT.md appendix A,
+  `docs/labels_explained.md`); the GUI only displays them.

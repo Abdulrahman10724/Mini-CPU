@@ -156,13 +156,19 @@ draws them. `gui/tests/test_analysis_stats.py` checks them against the known tes
 
 ## 9. How the branch arcs are found
 
-A jump (JMP, JZ, JNZ) is **taken** if the *next* STEP line is the jump's target line.
-Otherwise (the next step is simply the next line) it was **not taken**. Every taken jump adds
-1 to a counter for the pair (from line, to line); each pair becomes one arc in Fig. 5,
-labelled with its count ("4×"). Example, the loop sum: step 5 runs `JNZ 3` on line 5 and
-step 6 runs line 3, so the arc 5 → 3 gets +1; this happens 4 times, and the 5th time JNZ falls
-through to line 6.
+A jump (JMP, JZ, JNZ) is **taken** if the *next* STEP line is where its target leads.
+The target is the number after the jump, or the line of its label (`JNZ L1`, read from the
+program text). "Where it leads" is the first non-empty line from the target on, because
+empty lines and label-only lines (`LOOP:`) produce no STEP. If the next step is the line
+after the jump instead, it was **not taken**. Every taken jump adds 1 to a counter for the
+pair (from line, to line); each pair becomes one arc in Fig. 5, labelled with its count
+("4×"). Example, the loop sum: step 5 runs `JNZ L1` on line 5 and step 6 runs line 3, so
+the arc 5 → 3 gets +1; this happens 4 times, and the 5th time JNZ falls through to line 6.
 
-One special case: if the 500-step guard stops the CPU right on a jump, there is no next STEP
-line, so result.txt does not say where it would go. That last jump is counted neither taken
-nor not taken.
+Two special cases:
+- If the 500-step guard stops the CPU right on a jump, there is no next STEP line, so
+  result.txt does not say where it would go. That jump is counted neither way.
+- If the target and the next line lead to the same place (`JZ 5` on line 4), the data
+  cannot tell them apart: a JMP counts as taken, a JZ / JNZ as not taken.
+
+Labels themselves are explained in `docs/labels_explained.md`.
