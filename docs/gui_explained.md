@@ -21,7 +21,7 @@ JS state <--(dict)-- result_parser.py <--reads-- gui/runtime/result.txt
    so no console window appears.
 3. `result_parser.py` reads `result.txt` line by line and checks that it follows
    CONTRACT.md exactly: STATUS first, then ERR lines in order, STEP numbers 1, 2, 3, ...,
-   7 numbers per STEP, and one END. If anything is wrong it raises an error, and the GUI
+   9 numbers per STEP, and one END. If anything is wrong it raises an error, and the GUI
    shows "result.txt is not valid" instead of a wrong picture.
 4. The dict goes back to JavaScript as JSON:
    `{status, errors: [{line, code}], steps: [{n, line, ax, bx, cx, dx, zf}], end: {type, value}}`.
@@ -123,8 +123,8 @@ the timeline stops*, not what the CPU computed.
 
 ## 7. The three sheets (routing)
 
-The window is one HTML page with three `<section class="page">` elements: §1 Cover,
-§2 Workbench and §3 Analysis. Only one is visible at a time. `router.js` reads the part of the
+The window is one HTML page with three `<section class="page">` elements: Cover,
+Workbench and Analysis. Only one is visible at a time. `router.js` reads the part of the
 address after `#` (`#cover`, `#workbench`, `#analysis`); when it changes (a click in the
 section index, Alt+1/2/3, or a cover row), `show(page)`:
 
@@ -133,35 +133,32 @@ section index, Alt+1/2/3, or a cover row), `show(page)`:
 2. underlines the right entry in the section index and updates the footer "SHEET n OF 3";
 3. tells `main.js`, which e.g. starts the chip demo on the cover or draws the analysis.
 
-The app always opens on the cover. §3 stays disabled ("Run a program first") until there is a
+The app always opens on the cover. Analysis stays disabled ("Run a program first") until there is a
 result. Nothing is reloaded when switching: the Workbench keeps its program and result.
 
 ## 8. Where the analysis numbers come from
 
-Every number on §3 is a **count of what result.txt says**; nothing is simulated again.
+Every number on the Analysis page is a **count of what result.txt says**; nothing is simulated again.
 After a run, `bridge.py` keeps the program text and the parsed result. `api.analysis()` calls
 `analysis_stats.compute(result, code)` once, which walks the STEP lines:
 
 - **Total steps, termination**: the number of STEP lines and the END line.
-- **Line counts** (Fig. 5 heat bars): how many STEP lines have each line number.
-- **Instruction mix** (Fig. 4): the opcode of each executed line (the first word of the line
-  in program.txt), counted.
-- **Ranges, final values, ZF transitions**: min / max / last of each register column, and how
-  often ZF differs from the step before.
+- **Line counts** (the ×N in Fig. 3): how many STEP lines have each line number.
+- **Ranges, final values, flag transitions**: min / max / last of each register column, and
+  how often ZF, SF and CF differ from the step before.
 - **Errors**: the ERR lines.
 
-The JavaScript (`analysis.js`, `charts.js`, `profile.js`) only lays these numbers out and
-draws them. `gui/tests/test_analysis_stats.py` checks them against the known test programs
+The JavaScript (`analysis.js`, `profile.js`) only lays these numbers out. `gui/tests/test_analysis_stats.py` checks them against the known test programs
 (e.g. the loop-sum test: 18 steps, line 3 ran 5 times, 4 jumps taken, 1 not taken).
 
 ## 9. How the branch arcs are found
 
-A jump (JMP, JZ, JNZ) is **taken** if the *next* STEP line is where its target leads.
+A jump (JMP, JZ, JNZ, JS, JNS, JC, JNC) is **taken** if the *next* STEP line is where its target leads.
 The target is the number after the jump, or the line of its label (`JNZ L1`, read from the
 program text). "Where it leads" is the first non-empty line from the target on, because
 empty lines and label-only lines (`LOOP:`) produce no STEP. If the next step is the line
 after the jump instead, it was **not taken**. Every taken jump adds 1 to a counter for the
-pair (from line, to line); each pair becomes one arc in Fig. 5, labelled with its count
+pair (from line, to line); each pair becomes one arc in Fig. 3, labelled with its count
 ("4×"). Example, the loop sum: step 5 runs `JNZ L1` on line 5 and step 6 runs line 3, so
 the arc 5 → 3 gets +1; this happens 4 times, and the 5th time JNZ falls through to line 6.
 

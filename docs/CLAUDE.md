@@ -51,6 +51,8 @@ mini-cpu/
 - Live mode: CPU.exe re-runs on the whole program once the user stops typing for 900 ms
   (every key, Enter too, restarts the timer); old results stay dimmed meanwhile.
   Ctrl+Enter / RUN runs at once, animated.
-- Run / Step / Reset, play / pause, breakpoints (GUI only), Open / Save, demos, help.
+- Three sheets: Cover, Workbench, Analysis. Run / Reset, step and play in the signal trace
+  (F10 / Shift+F10), breakpoints (GUI only), Open / Save, demos, help (F1).
+- Must fit at 1366x768 and 1440x900 (`gui/dev/screenshots_v5.js` checks for overflow).
 - Labels (`L1: ...`, `JNZ L1`) are resolved by CPU.asm in two passes (CONTRACT.md appendix A,
   `docs/labels_explained.md`); the GUI only displays them.

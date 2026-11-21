@@ -88,4 +88,4 @@ Each STEP line ends with the three flags: `STEP <n> <line> <AX> <BX> <CX> <DX> <
 - Fig. 1, U4 FLAGS: three printed circles, ZF SF CF (hollow = 0, solid ink = 1);
 - Fig. 2: SF and CF square waves under ZF;
 - the log's Δ column: flag changes such as `SF↑ CF↑` (↑ became 1, ↓ became 0);
-- §3 Analysis: SF and CF columns in Table 2 and their transitions in Table 1.
+- the Analysis page: SF and CF columns in Table 2 and their transitions in Table 1.
