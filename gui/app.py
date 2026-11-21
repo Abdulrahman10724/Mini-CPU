@@ -59,7 +59,7 @@ def main():
     window = webview.create_window(
         "Mini CPU Simulator", url=os.path.join(GUI_DIR, "web", "index.html"),
         js_api=api, width=1440, height=900, min_size=(1280, 680),
-        background_color="#0A0F1C")
+        background_color="#F3EFE6")
     api._window = window
     # http_server=True serves the page over http://127.0.0.1, which ES modules need.
     webview.start(debug=args.debug, http_server=True)
