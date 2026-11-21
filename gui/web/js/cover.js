@@ -47,9 +47,9 @@ export function initCover(coverHooks, session) {
         </figure>
 
         <table class="drawing-block" aria-label="Title block">
-          <tr><th>TITLE</th><td class="tb-title">MINI CPU SIMULATOR</td><td class="tb-side">SHEET 1/3</td></tr>
-          <tr><th>DRAWN BY</th><td>Abdul Rahman&nbsp;&nbsp;25K-2508<br>Muhammad Salman&nbsp;&nbsp;25K-2509<br>Shahmir Shahid&nbsp;&nbsp;25K-2510</td><td class="tb-side">REV 1.0</td></tr>
-          <tr><th>CHECKED BY</th><td colspan="2">Abdullah Sheikh (Lab Instructor)</td></tr>
+          <tr><th>TITLE</th><td class="tb-title">MINI CPU SIMULATOR</td></tr>
+          <tr><th>DRAWN BY</th><td>Abdul Rahman&nbsp;&nbsp;25K-2508<br>Muhammad Salman&nbsp;&nbsp;25K-2509<br>Shahmir Shahid&nbsp;&nbsp;25K-2510</td></tr>
+          <tr><th>Instructor</th><td colspan="2">Abdullah Sheikh (Lab Instructor)</td></tr>
           <tr><th>COURSE</th><td colspan="2">EL-2003 COAL Lab · BDS-3A · Fall 2026</td></tr>
           <tr><th>INSTITUTION</th><td colspan="2">FAST NUCES Karachi</td></tr>
         </table>
