@@ -12,6 +12,8 @@
 ;   PASS 2 (ParseAllLines): check every instruction; a jump to a label
 ;          gets the line number from the symbol table (LookupLabel).
 ; Then the program is executed and result.txt is written.
+; Flags: ZF (zero), SF (sign) and CF (carry), with the real x86 rules
+; (CONTRACT.md appendix B). SF/CF are copied from the REAL CPU flags.
 ; =====================================================================
 
 ; Irvine32.inc already sets up the 32-bit flat memory model for us:
@@ -31,12 +33,12 @@ TOKEN_LEN  = 16       ; bytes per token: 15 chars + 0 terminator
 BUF_SIZE   = 4096     ; max bytes read from program.txt
 OUT_SIZE   = 40000    ; result.txt output buffer
                       ; Size check: the longest STEP line is
-                      ; "STEP 500 50 -2147483648 -2147483648 -2147483648 -2147483648 1" + LF
-                      ; = 62 bytes, x 500 steps = 31000 bytes. Plus STATUS (11), up to 51 ERR
-                      ; lines (max 9 bytes each = 459) and END (max 15) -> about 31.5 KB < 40000.
+                      ; "STEP 500 50 -2147483648 -2147483648 -2147483648 -2147483648 1 1 1" + LF
+                      ; = 66 bytes, x 500 steps = 33000 bytes. Plus STATUS (11), up to 51 ERR
+                      ; lines (max 9 bytes each = 459) and END (max 15) -> about 33.5 KB < 40000.
 
 ; Name table sizes (Phase 3)
-NUM_OPCODES = 10      ; entries in opNames
+NUM_OPCODES = 14      ; entries in opNames
 OP_SLOT     = 4       ; bytes per opNames slot
 NUM_REGS    = 4       ; entries in regNames
 REG_SLOT    = 3       ; bytes per regNames slot
@@ -52,6 +54,10 @@ OP_JMP = 7
 OP_JZ  = 8
 OP_JNZ = 9
 OP_HLT = 10
+OP_JS  = 11           ; jump if SF = 1 (result was negative)
+OP_JNS = 12           ; jump if SF = 0
+OP_JC  = 13           ; jump if CF = 1 (carry / borrow)
+OP_JNC = 14           ; jump if CF = 0
 
 ; instSrcType values
 SRC_NONE     = 0      ; no source operand (INC, DEC, HLT)
@@ -113,6 +119,7 @@ tokCount     DWORD 0                       ; total words found on the line (can 
 ; ---------------------------------------------------------------------
 instOp       BYTE  MAX_LINES DUP(0)        ; 0=empty 1=MOV 2=ADD 3=SUB 4=CMP 5=INC
                                            ; 6=DEC 7=JMP 8=JZ 9=JNZ 10=HLT
+                                           ; 11=JS 12=JNS 13=JC 14=JNC
 instDst      BYTE  MAX_LINES DUP(0)        ; destination register index 0..3
 instSrcType  BYTE  MAX_LINES DUP(0)        ; 0=none, 1=register, 2=number
 instSrc      SDWORD MAX_LINES DUP(0)       ; register index, number, or jump target line
@@ -132,20 +139,23 @@ labelLen     DWORD 0                       ; its real length (only 15 chars fit 
 ; Name tables (Phase 3)
 ; ---------------------------------------------------------------------
 ; Each opcode name sits in a fixed 4-byte slot (padded with 0),
-; so slot index + 1 = opcode number (MOV = 1 ... HLT = 10).
+; so slot index + 1 = opcode number (MOV = 1 ... HLT = 10 ... JNC = 14).
 opNames      BYTE "MOV",0, "ADD",0, "SUB",0, "CMP",0, "INC",0
              BYTE "DEC",0, "JMP",0, "JZ",0,0, "JNZ",0, "HLT",0
+             BYTE "JS",0,0, "JNS",0, "JC",0,0, "JNC",0
 ; Each register name sits in a fixed 3-byte slot: slot index = register index.
 regNames     BYTE "AX",0, "BX",0, "CX",0, "DX",0
 ; Number of operands each opcode needs, index = opcode - 1
-;                  MOV ADD SUB CMP INC DEC JMP JZ JNZ HLT
-opOperandCount BYTE 2,  2,  2,  2,  1,  1,  1,  1, 1,  0
+;                  MOV ADD SUB CMP INC DEC JMP JZ JNZ HLT JS JNS JC JNC
+opOperandCount BYTE 2,  2,  2,  2,  1,  1,  1,  1, 1,  0,  1, 1,  1, 1
 
 ; ---------------------------------------------------------------------
 ; Virtual CPU state (Phase 4) - plain memory, NOT the real CPU registers
 ; ---------------------------------------------------------------------
 regs         SDWORD 4 DUP(0)               ; virtual AX, BX, CX, DX
-zeroFlag     DWORD 0                       ; virtual ZF (0 or 1)
+zeroFlag     DWORD 0                       ; virtual ZF (0 or 1): result was 0
+signFlag     DWORD 0                       ; virtual SF (0 or 1): bit 31 of the result (negative)
+carryFlag    DWORD 0                       ; virtual CF (0 or 1): unsigned carry / borrow
 pc           DWORD 1                       ; virtual program counter = current line number (1-based)
 stepCount    DWORD 0                       ; instructions executed so far
 endType      BYTE 0                        ; how execution ended: END_HALT/NOHLT/ERRSTOP/LOOP
@@ -196,6 +206,8 @@ dbgBX        BYTE " BX=",0
 dbgCX        BYTE " CX=",0
 dbgDX        BYTE " DX=",0
 dbgZF        BYTE " ZF=",0
+dbgSF        BYTE " SF=",0
+dbgCF        BYTE " CF=",0
 dbgNoWrite   BYTE "ERROR: cannot create result.txt",0
 dbgLabels    BYTE "LABELS:",0
 dbgAtLine    BYTE " = LINE ",0
@@ -875,7 +887,7 @@ StrEquals ENDP
 ; LookupOpcode
 ; Purpose:  Find a word in the opNames table (4-byte slots).
 ; Receives: ESI = address of the word
-; Returns:  EAX = opcode number 1..10, or 0 if the word is not an opcode
+; Returns:  EAX = opcode number 1..14, or 0 if the word is not an opcode
 ; Changes:  nothing else
 ; ---------------------------------------------------------------------
 LookupOpcode PROC USES ecx edi
@@ -1082,7 +1094,7 @@ ParseSrcOperand ENDP
 
 ; ---------------------------------------------------------------------
 ; ParseJumpTarget
-; Purpose:  Check the operand of JMP/JZ/JNZ. It is either
+; Purpose:  Check the operand of a jump (JMP JZ JNZ JS JNS JC JNC). It is either
 ;           - a line number (starts with a digit, '-' or '+'): must be a
 ;             valid number from 1 to lineCount, or
 ;           - a label name: looked up in the symbol table from PASS 1.
@@ -1178,7 +1190,8 @@ CountOK:
 
     cmp  ecx, OP_HLT               ; HLT has no operands to check
     je   CheckExtra
-    cmp  ecx, OP_JMP               ; JMP, JZ, JNZ (7..9) take a line number or a label
+    cmp  ecx, OP_JMP               ; all jumps (7..9 and 11..14; HLT = 10 was handled
+                                   ; just above) take a line number or a label
     jae  JumpOperand
 
     ; ---- 3. operand 1 must be a register (MOV ADD SUB CMP INC DEC) ----
@@ -1384,6 +1397,44 @@ IsZero:
 SetZeroFlag ENDP
 
 ; ---------------------------------------------------------------------
+; SetSignFlag
+; Purpose:  Set the virtual Sign Flag from a result: bit 31 of a signed
+;           32-bit number is 1 exactly when the number is negative.
+; Receives: EAX = result
+; Returns:  nothing
+; Changes:  signFlag
+; ---------------------------------------------------------------------
+SetSignFlag PROC
+    test eax, 80000000h            ; look only at bit 31 (the sign bit)
+    jz   Positive
+    mov  signFlag, 1               ; bit 31 = 1 -> negative
+    ret
+Positive:
+    mov  signFlag, 0               ; bit 31 = 0 -> zero or positive
+    ret
+SetSignFlag ENDP
+
+; ---------------------------------------------------------------------
+; StoreCarry
+; Purpose:  Copy the REAL CPU's Carry flag into the virtual carryFlag.
+;           Call it IMMEDIATELY after the real ADD/SUB: the next CMP or
+;           TEST would overwrite the real flags. CALL, RET and MOV do not
+;           change the flags, so the carry of the ADD/SUB is still there.
+;           The real CPU already computes exactly the CF we want:
+;           ADD -> carry out of bit 31, SUB -> borrow (unsigned dst < src).
+; Receives: the real Carry flag (from the instruction just before the CALL)
+; Returns:  nothing
+; Changes:  carryFlag
+; ---------------------------------------------------------------------
+StoreCarry PROC
+    mov  carryFlag, 0              ; MOV does not touch the real flags
+    jnc  Done                      ; real CF = 0 -> keep 0
+    mov  carryFlag, 1              ; real CF = 1
+Done:
+    ret
+StoreCarry ENDP
+
+; ---------------------------------------------------------------------
 ; ExecuteInstruction
 ; Purpose:  Execute ONE parsed instruction (decode + execute) and work
 ;           out which line runs next.
@@ -1392,7 +1443,9 @@ SetZeroFlag ENDP
 ;           32-bit values.
 ; Receives: EBX = instruction index (line - 1), pc, instruction arrays
 ; Returns:  EAX = next pc, ECX = 1 if HLT was executed, else 0
-; Changes:  regs, zeroFlag
+; Changes:  regs, zeroFlag, signFlag, carryFlag
+;           Flags: ADD/SUB/CMP set ZF, SF and CF; INC/DEC set ZF and SF
+;           but keep CF (like real x86); MOV, jumps and HLT change none.
 ; Register use inside: ESI = destination register index, EDX = opcode
 ; ---------------------------------------------------------------------
 ExecuteInstruction PROC USES edx esi
@@ -1421,45 +1474,61 @@ ExecuteInstruction PROC USES edx esi
     je   DoJnz
     cmp  edx, OP_HLT
     je   DoHlt
+    cmp  edx, OP_JS
+    je   DoJs
+    cmp  edx, OP_JNS
+    je   DoJns
+    cmp  edx, OP_JC
+    je   DoJc
+    cmp  edx, OP_JNC
+    je   DoJnc
     jmp  NextLine                  ; (never happens: only valid opcodes get here)
 
-DoMov:                             ; MOV dst, src : dst = src, ZF unchanged
+DoMov:                             ; MOV dst, src : dst = src, no flag changes
     call GetSourceValue            ; EAX = src
     mov  regs[esi*4], eax
     jmp  NextLine
 
-DoAdd:                             ; ADD dst, src : dst = dst + src, set ZF
+DoAdd:                             ; ADD dst, src : dst = dst + src, set ZF SF CF
     call GetSourceValue
-    add  regs[esi*4], eax
+    add  regs[esi*4], eax          ; the real ADD sets the real Carry flag
+    call StoreCarry                ; copy it FIRST (SetZeroFlag's CMP would destroy it)
     mov  eax, regs[esi*4]          ; EAX = result
     call SetZeroFlag
+    call SetSignFlag
     jmp  NextLine
 
-DoSub:                             ; SUB dst, src : dst = dst - src, set ZF
+DoSub:                             ; SUB dst, src : dst = dst - src, set ZF SF CF
     call GetSourceValue
-    sub  regs[esi*4], eax
+    sub  regs[esi*4], eax          ; the real SUB sets Carry = borrow
+    call StoreCarry                ; copy it FIRST
     mov  eax, regs[esi*4]
     call SetZeroFlag
+    call SetSignFlag
     jmp  NextLine
 
-DoCmp:                             ; CMP dst, src : ZF = (dst == src), no register changes
+DoCmp:                             ; CMP dst, src : flags like SUB, no register changes
     call GetSourceValue            ; EAX = src
     mov  edx, regs[esi*4]          ; EDX = a COPY of dst
     sub  edx, eax                  ; dst - src is 0 exactly when dst == src
+    call StoreCarry                ; borrow of the subtraction -> CF
     mov  eax, edx                  ; (the virtual register itself is not changed)
     call SetZeroFlag
+    call SetSignFlag
     jmp  NextLine
 
-DoInc:                             ; INC dst : dst = dst + 1, set ZF
-    inc  regs[esi*4]
-    mov  eax, regs[esi*4]
+DoInc:                             ; INC dst : dst = dst + 1, set ZF SF
+    inc  regs[esi*4]               ; (no StoreCarry: real INC never changes CF,
+    mov  eax, regs[esi*4]          ;  so a loop counter does not destroy a carry)
     call SetZeroFlag
+    call SetSignFlag
     jmp  NextLine
 
-DoDec:                             ; DEC dst : dst = dst - 1, set ZF
+DoDec:                             ; DEC dst : dst = dst - 1, set ZF SF (CF kept)
     dec  regs[esi*4]
     mov  eax, regs[esi*4]
     call SetZeroFlag
+    call SetSignFlag
     jmp  NextLine
 
 DoJmp:                             ; JMP n : always go to line n
@@ -1475,6 +1544,30 @@ DoJz:                              ; JZ n : go to line n only if ZF = 1
 DoJnz:                             ; JNZ n : go to line n only if ZF = 0
     cmp  zeroFlag, 0
     jne  NextLine                  ; ZF = 1 -> not taken
+    mov  eax, instSrc[ebx*4]
+    jmp  Done
+
+DoJs:                              ; JS n : go to line n only if SF = 1
+    cmp  signFlag, 1
+    jne  NextLine                  ; SF = 0 -> not taken
+    mov  eax, instSrc[ebx*4]
+    jmp  Done
+
+DoJns:                             ; JNS n : go to line n only if SF = 0
+    cmp  signFlag, 0
+    jne  NextLine                  ; SF = 1 -> not taken
+    mov  eax, instSrc[ebx*4]
+    jmp  Done
+
+DoJc:                              ; JC n : go to line n only if CF = 1
+    cmp  carryFlag, 1
+    jne  NextLine                  ; CF = 0 -> not taken
+    mov  eax, instSrc[ebx*4]
+    jmp  Done
+
+DoJnc:                             ; JNC n : go to line n only if CF = 0
+    cmp  carryFlag, 0
+    jne  NextLine                  ; CF = 1 -> not taken
     mov  eax, instSrc[ebx*4]
     jmp  Done
 
@@ -1508,7 +1601,9 @@ ExecuteProgram PROC USES eax ebx ecx edx
     mov  regs[4], 0                ; BX
     mov  regs[8], 0                ; CX
     mov  regs[12], 0               ; DX
-    mov  zeroFlag, 0
+    mov  zeroFlag, 0               ; all three flags start at 0
+    mov  signFlag, 0
+    mov  carryFlag, 0
     mov  pc, 1                     ; execution always starts at line 1
     mov  stepCount, 0
 
@@ -1596,7 +1691,7 @@ DebugWriteSigned ENDP
 ; ---------------------------------------------------------------------
 ; DebugPrintStep
 ; Purpose:  When DEBUG = 1, print one executed step:
-;           STEP <n> LINE <l>: AX=<v> BX=<v> CX=<v> DX=<v> ZF=<z>
+;           STEP <n> LINE <l>: AX=<v> BX=<v> CX=<v> DX=<v> ZF=<z> SF=<s> CF=<c>
 ; Receives: stepCount, pc (the line just executed), regs, zeroFlag
 ; Returns:  nothing
 ; Changes:  nothing (console output only)
@@ -1633,6 +1728,14 @@ DebugPrintStep PROC USES eax edx
     mov  edx, OFFSET dbgZF         ; " ZF=<z>"
     call WriteString
     mov  eax, zeroFlag
+    call WriteDec
+    mov  edx, OFFSET dbgSF         ; " SF=<s>"
+    call WriteString
+    mov  eax, signFlag
+    call WriteDec
+    mov  edx, OFFSET dbgCF         ; " CF=<c>"
+    call WriteString
+    mov  eax, carryFlag
     call WriteDec
     call Crlf
 Done:
@@ -1851,7 +1954,7 @@ AppendStatusAndErrors ENDP
 
 ; ---------------------------------------------------------------------
 ; AppendStepLine
-; Purpose:  Write one "STEP <n> <line> <AX> <BX> <CX> <DX> <ZF>" line,
+; Purpose:  Write one "STEP <n> <line> <AX> <BX> <CX> <DX> <ZF> <SF> <CF>" line,
 ;           with the register values AFTER the instruction ran.
 ; Receives: stepCount, pc (the line just executed), regs, zeroFlag
 ; Returns:  nothing
@@ -1879,6 +1982,12 @@ RegLoop:
 
     call AppendSpace
     mov  eax, zeroFlag             ; ZF
+    call AppendNumber
+    call AppendSpace
+    mov  eax, signFlag             ; SF
+    call AppendNumber
+    call AppendSpace
+    mov  eax, carryFlag            ; CF
     call AppendNumber
     call AppendNewline
     ret

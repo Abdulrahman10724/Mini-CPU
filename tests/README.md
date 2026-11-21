@@ -26,6 +26,9 @@ Run on Windows after building CPU.exe:
 4. More than 50 lines: a single `ERR 51 7`; only lines 1-50 are parsed. Running past line 50
    reaches line 51 -> `END ERRSTOP 51`. Jump range is 1..50.
 5. MOV and jumps never change ZF. ADD/SUB/INC/DEC set ZF = (result == 0). ZF starts at 0.
+   SF and CF (CONTRACT.md appendix B): ADD/SUB/CMP set SF = bit 31 of the result and CF =
+   unsigned carry (ADD) / borrow (SUB, CMP). INC/DEC set SF only and keep CF. MOV, jumps
+   and HLT change no flag. Both start at 0. STEP lines end with `<ZF> <SF> <CF>`.
 6. HLT and jumps count as steps (as in the CONTRACT example).
 7. Loop guard: after the 500th step, if not halted, `END LOOP 500`.
 8. Missing program.txt: `STATUS ERR`, `ERR 0 9`, `END ERRSTOP 0`.
@@ -45,4 +48,5 @@ Run on Windows after building CPU.exe:
       still defined.
     - A line with a label error is not parsed further (one error per line).
     - Labels are only jump targets: `MOV AX, L1` -> 2, as any non-register word.
+      All seven jumps (JMP JZ JNZ JS JNS JC JNC) take a line number or a label.
     - Unused labels are fine (no error). Jumps still accept line numbers (`JNZ 3`).
