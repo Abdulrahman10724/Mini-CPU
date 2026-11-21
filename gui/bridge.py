@@ -38,6 +38,30 @@ DEMOS = [
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 FILE_TYPES = ("Text files (*.txt)", "All files (*.*)")
 OPEN_DIALOG, SAVE_DIALOG = 10, 30        # = webview.FileDialog.OPEN / .SAVE
+# A program has at most 50 lines and CPU.exe reads only the first 4 KB, so a bigger
+# file is certainly not a program (and loading megabytes into the editor would freeze it).
+MAX_OPEN_BYTES = 64 * 1024
+
+
+def read_program_file(path):
+    """Read a program file for the editor. Returns (code, None) or (None, error message).
+    Refuses: not .txt, larger than 64 KB, binary data (NUL bytes). A UTF-8 BOM is dropped
+    (CPU.exe skips it too)."""
+    name = os.path.basename(path)
+    if not name.lower().endswith(".txt"):
+        return None, f"{name} is not a .txt program. Programs are plain .txt files."
+    size = os.path.getsize(path)
+    if size > MAX_OPEN_BYTES:
+        return None, (f"{name} is too large ({size // 1024} KB). A program has at most 50 lines; "
+                      "CPU.exe reads only the first 4 KB.")
+    with open(path, "rb") as f:
+        data = f.read()
+    if b"\0" in data:
+        return None, f"{name} is not a text program (it contains binary data)."
+    code = data.decode("utf-8", errors="replace")
+    if code.startswith("\ufeff"):
+        code = code[1:]
+    return code, None
 
 
 class Api:
@@ -112,8 +136,11 @@ class Api:
         demo = next((d for d in DEMOS if d["id"] == demo_id), None)
         if demo is None or self._engine["state"] == "missing":
             return {"ok": False}
-        with open(os.path.join(DEMOS_DIR, demo_id + ".txt"), "r", encoding="utf-8") as f:
-            code = f.read()
+        try:
+            with open(os.path.join(DEMOS_DIR, demo_id + ".txt"), "r", encoding="utf-8") as f:
+                code = f.read()
+        except OSError:
+            return {"ok": False}
         folder = os.path.join(RUNTIME_DIR, "demo")
         os.makedirs(folder, exist_ok=True)
         res = self._run_in(code, folder)
@@ -127,6 +154,7 @@ class Api:
         program = os.path.join(folder, "program.txt")
         result = os.path.join(folder, "result.txt")
         try:
+            os.makedirs(folder, exist_ok=True)       # (the runtime folder may have been deleted)
             text = code.replace("\r\n", "\n").replace("\r", "\n")
             with open(program, "w", encoding="utf-8", newline="\n") as f:
                 f.write(text)
@@ -138,6 +166,13 @@ class Api:
         except subprocess.TimeoutExpired:
             return {"ok": False, "error": "The CPU engine did not finish within 5 seconds."}
         except OSError as e:
+            exe = self._engine.get("path", "")
+            if self._engine["state"] == "ready" and not os.path.isfile(exe):
+                # CPU.exe was deleted or moved while the GUI was open: show the
+                # "engine missing" card (with Retry) instead of failing on every run
+                self._engine = {"state": "missing", "path": exe}
+                return {"ok": False, "engine": dict(self._engine),
+                        "error": "CPU.exe is no longer there (deleted or moved). Build it again, then press Retry."}
             return {"ok": False, "error": f"Could not run the CPU engine: {e}"}
 
         if not os.path.exists(result):
@@ -156,8 +191,9 @@ class Api:
             if not paths:
                 return {"ok": False, "cancelled": True}
             path = paths[0] if isinstance(paths, (list, tuple)) else paths
-            with open(path, "r", encoding="utf-8", errors="replace") as f:
-                code = f.read()
+            code, error = read_program_file(path)
+            if error:
+                return {"ok": False, "error": error}
             return {"ok": True, "path": path, "name": os.path.basename(path), "code": code}
         except Exception as e:           # never raise to JavaScript
             return {"ok": False, "error": f"Could not open the file: {e}"}

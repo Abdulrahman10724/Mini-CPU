@@ -31,9 +31,19 @@ def to_int32(value):
     return value - 2**32 if value >= 2**31 else value
 
 
+def ascii_upper(text):
+    """Like ToUpperLine: only 'a'..'z' change (Python's upper() would also change
+    non-ASCII letters, e.g. 'ß' -> 'SS', which CPU.exe does not do)."""
+    return "".join(chr(ord(c) - 32) if "a" <= c <= "z" else c for c in text)
+
+
 def split_lines(data):
-    """Same rules as SplitLines: LF ends a line, CR ignored, TAB -> space, max 63 chars."""
+    """Same rules as SplitLines: LF ends a line, CR ignored, TAB -> space, max 63 chars.
+    A UTF-8 BOM (EF BB BF) at the very start is skipped. A NUL byte ends the stored
+    line early, because CPU.exe keeps every line as a 0-terminated string."""
     lines, i, too_many = [], 0, False
+    if data[:3] == b"\xef\xbb\xbf":
+        i = 3
     while i < len(data):
         if len(lines) == 50:
             too_many = True
@@ -50,7 +60,7 @@ def split_lines(data):
                 c = 32
             if len(text) < 63:
                 text += chr(c)
-        lines.append(text.upper())
+        lines.append(ascii_upper(text.split("\0")[0]))
     return lines, too_many
 
 
