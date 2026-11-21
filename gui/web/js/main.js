@@ -2,7 +2,7 @@
 // Flow of one run:  editor text -> api.run() -> Python writes program.txt, runs CPU.exe,
 // parses result.txt -> state.result -> every component re-renders from state.
 
-import { state, update, subscribe, totalSteps, errorOnLine, stateAt, indexes, lineText as lineTextOf } from "./state.js";
+import { state, update, subscribe, totalSteps, errorOnLine, stateAt, indexes } from "./state.js";
 import { setHighlight, getHighlight, onHighlight } from "./highlight.js";
 import { api } from "./api.js";
 import { toast, clearToast } from "./toast.js";
@@ -12,13 +12,13 @@ import { playStep, cancelAnimation, isAnimating, STEP_MS } from "./animator.js";
 import { errorInfo } from "./errors.js";
 import { confirmDialog } from "./dialog.js";
 import { initRouter, go, currentPage, setAnalysisAvailable, PAGES } from "./router.js";
-import { initCover, renderCoverEngine, renderOrders, coverKeys } from "./cover.js";
+import { initCover, renderOrders, coverKeys } from "./cover.js";
 import { initChip, chipShown, chipHidden, setDemoTrace } from "./chip.js";
 import { initAnalysis, renderAnalysis } from "./analysis.js";
 import { initHistory, renderHistory, markLineRows } from "./history.js";
 import { initWaveform, renderWaveform, setTraceLink, previewStep } from "./waveform.js";
 import { initHelp, renderHelp } from "./help.js";
-import { initEngineUi, renderEngine, closeEnginePopover } from "./engine.js";
+import { initEngineUi, renderEngine } from "./engine.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -54,7 +54,7 @@ async function runCode(code, mode, lineHint = null) {
 function applyResult(result, code, mode, lineHint) {
   stopPlaying();
   const N = result.steps.length;
-  setAnalysisAvailable(true);                       // §3 Analysis now has data
+  setAnalysisAvailable(true);                       // the Analysis page now has data
 
   if (mode === "run") {                     // Run: from step 0, animated to the end
     update({ result, resultCode: code, cursor: 0 });
@@ -68,15 +68,20 @@ function applyResult(result, code, mode, lineHint) {
     // replay only the last execution of the line the user just finished, once
     let j = 0;
     result.steps.forEach((st, i) => { if (st.line === lineHint) j = i + 1; });
-    if (j > 0 && state.speed !== "instant") playStep(j, STEP_MS[state.speed], N);
+    if (j > 0 && !noAnimation()) playStep(j, STEP_MS[state.speed], N);
   }
 }
 
 // ------------------------------------------------------------------ playback
+// No step animation when the system asks for reduced motion (there is no UI option
+// for it). "instant" is also an internal speed, used by the dev screenshot scripts.
+const REDUCED_MOTION = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const noAnimation = () => REDUCED_MOTION || state.speed === "instant";
+
 // goTo moves the timeline. With animate = true it plays the transition k-1 -> k.
 function goTo(k, { animate = false } = {}) {
   k = Math.max(0, Math.min(k, totalSteps()));
-  if (animate && k >= 1 && state.speed !== "instant") {
+  if (animate && k >= 1 && !noAnimation()) {
     const done = playStep(k, STEP_MS[state.speed]);   // starts before update(), so the
     update({ cursor: k });                             // datapath waits for the animation
     return done;
@@ -94,7 +99,7 @@ async function play() {
   if (state.cursor >= N) goTo(0);
   const token = ++playToken;
   update({ playing: true });
-  if (state.speed === "instant") {
+  if (noAnimation()) {
     goTo(nextBreakpointStep(state.cursor) || N);
   } else {
     while (token === playToken && state.cursor < N) {
@@ -219,13 +224,6 @@ function renderTopBar(s, patch) {
   }
   if ("engine" in patch) {
     $("runBtn").disabled = s.engine.state === "missing";
-    $("stepBtn").disabled = s.engine.state === "missing";
-    const btn = $("engineBtn");
-    btn.dataset.state = s.engine.state;
-    $("engineText").textContent = {
-      ready: "ENGINE OK", missing: "ENGINE MISSING", mock: "MOCK ENGINE", checking: "ENGINE …",
-    }[s.engine.state];
-    btn.title = s.engine.path || "";
   }
 }
 
@@ -305,7 +303,7 @@ function onShowPage(page) {
   }
 }
 
-// The cover's ordering table: every row opens §2 Workbench with a program.
+// The cover's ordering table: every row opens the Workbench with a program.
 async function coverAction(a) {
   if (a.act === "file") { if (await openFile()) go("workbench"); return; }
   if (!(await confirmDiscard())) return;
@@ -359,7 +357,6 @@ function wireTopBar() {
   $("logoBtn").addEventListener("click", () => go("cover"));
   $("analysisBtn").addEventListener("click", () => go("analysis"));
   $("runBtn").addEventListener("click", () => { cancelLiveRun(); runCode(state.code, "run"); });
-  $("stepBtn").addEventListener("click", stepForward);
   $("resetBtn").addEventListener("click", resetTimeline);
 }
 
@@ -398,7 +395,6 @@ const pageKeys = {};
 
 function closeOverlays() {
   if (!$("demosMenu").hidden) { closeDemos(); $("demosBtn").focus(); return; }
-  if (!$("enginePop").hidden) { closeEnginePopover(); $("engineBtn").focus(); return; }
   if (state.helpOpen) update({ helpOpen: false });
 }
 
@@ -426,7 +422,7 @@ async function retryEngine() {
   const engine = await api.recheckEngine();
   update({ engine });
   if (engine.state === "missing") toast("CPU.exe is still not found", "red");
-  else { toast("Engine ready", "green"); closeEnginePopover(); if (state.code) runCode(state.code, "live"); }
+  else { toast("Engine ready", "green"); if (state.code) runCode(state.code, "live"); }
 }
 
 // ------------------------------------------------------------------ boot
@@ -462,7 +458,6 @@ async function boot() {
   initEngineUi({ onRetry: retryEngine });
   subscribe(renderEngine);
   wireArrowKeys();
-  $("helpBtn").addEventListener("click", () => update({ helpOpen: !state.helpOpen }));
 
   initEditor($("editorHost"), {
     onCodeChange: (code, { programmatic }) => update({ code, dirty: programmatic ? state.dirty : true }),
@@ -473,15 +468,13 @@ async function boot() {
   });
   wireTopBar();
 
-  const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  update({ speed: reduced ? "instant" : "1", fileName: state.fileName, dirty: false, code: "" });
+  update({ speed: "1", fileName: state.fileName, dirty: false, code: "" });
 
   subscribe(saveSessionSoon);
   const session = await api.loadSession();
   lastSession = session && session.ok ? session : null;
   initCover({
     onAction: coverAction,
-    onEngineHelp: () => { if (state.engine.state === "missing") $("engineBtn").click(); },
     onDropError: (msg) => toast(msg, "red"),
   }, lastSession);
   pageKeys.cover = coverKeys;
@@ -492,14 +485,11 @@ async function boot() {
       go("workbench");
     },
   });
-  subscribe(renderCoverEngine);
   initAnalysis({
-    isVisible: () => currentPage() === "analysis",
     goWorkbench: () => go("workbench"),
     openAt: (k) => { go("workbench"); stopPlaying(); goTo(k); },
     openLine: (line) => { go("workbench"); jumpToLine(line); },
     lineOfStep: (k) => stateAt(k).line,
-    textOfStep: (k) => lineTextOf(stateAt(k).line),
     exportTrace: async () => {
       const res = await api.exportTrace(state.fileName.replace(/\.txt$/i, "") + "_trace.csv");
       if (res.ok) toast(`Saved ${res.name}`);

@@ -23,7 +23,7 @@ export const state = {
   resultCode: "",           // the exact code that produced `result`
   cursor: 0,                // timeline position 0..N (0 = before step 1)
   playing: false,
-  speed: "1",               // "0.25" | "0.5" | "1" | "2" | "instant"
+  speed: "1",               // "0.25" | "0.5" | "1" | "2" (shown); "instant" = internal (dev scripts)
   regFormat: "dec",         // "dec" | "hex" | "bin"
   helpOpen: false,
   breakpoints: new Set(),   // line numbers; GUI only, CPU.exe never sees them

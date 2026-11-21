@@ -37,16 +37,6 @@
     <pattern id="hatch" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <line x1="0" y1="0" x2="0" y2="4" stroke="#1B1A17" stroke-opacity=".35" stroke-width="1"/>
     </pattern>
-    <!-- Fig. 4 bars: hatching by instruction category instead of colour -->
-    <pattern id="hatchLight" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <line x1="0" y1="0" x2="0" y2="7" stroke="#1B1A17" stroke-width="1"/>
-    </pattern>
-    <pattern id="hatchDense" width="3.2" height="3.2" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <line x1="0" y1="0" x2="0" y2="3.2" stroke="#1B1A17" stroke-width="1"/>
-    </pattern>
-    <pattern id="hatchCross" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
-      <path d="M0 0V6M0 0H6" stroke="#1B1A17" stroke-width="1"/>
-    </pattern>
     <!-- uneven ink for the rubber stamp -->
     <filter id="stampInk" x="-10%" y="-10%" width="120%" height="120%">
       <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="noise"/>
@@ -63,35 +53,31 @@
       <button class="title" id="logoBtn" aria-label="Mini-CPU: go to the cover">
         <span class="title-name">MINI-CPU</span>
         <span class="title-sub">4-register educational processor · Datasheet Rev 1.0</span>
-        <span class="title-tag">BDS-3A-07</span>
       </button>
       <!-- section index, like a datasheet's table of contents -->
       <nav class="sections" id="sectionIndex" aria-label="Sections">
-        <a href="#cover" data-sec="cover">§1 Cover</a>
-        <a href="#workbench" data-sec="workbench">§2 Workbench</a>
-        <a href="#analysis" data-sec="analysis" aria-disabled="true" data-tip="Run a program first">§3 Analysis</a>
+        <a href="#cover" data-sec="cover">Cover</a>
+        <a href="#workbench" data-sec="workbench">Workbench</a>
+        <a href="#analysis" data-sec="analysis" aria-disabled="true" data-tip="Run a program first">Analysis</a>
       </nav>
     </div>
 
-    <div class="file wb-only" id="fileChip">
-      <span class="file-name" id="fileName">untitled.txt</span><span class="dirty" id="dirtyDot"
-        hidden aria-label="Unsaved changes">*</span>
-    </div>
-
-    <nav class="controls" aria-label="Controls">
-      <div class="wb-controls wb-only">
+    <!-- Workbench controls only (hidden on the other pages), aligned to the right edge -->
+    <nav class="controls wb-only" aria-label="Controls">
+      <div class="file" id="fileChip">
+        <span class="file-name" id="fileName">untitled.txt</span><span class="dirty" id="dirtyDot"
+          hidden aria-label="Unsaved changes">*</span>
+      </div>
       <button class="btn-run" id="runBtn" data-tip="Run (Ctrl+Enter)">
         <svg class="icon icon-fill"><use href="#i-play"/></svg>RUN</button>
-      <button class="ctl" id="stepBtn" data-tip="Step forward (F10)">STEP</button>
       <button class="ctl" id="resetBtn" data-tip="Back to step 0">RESET</button>
 
       <span class="sep" aria-hidden="true"></span>
       <div class="tabs" id="speedSeg" role="radiogroup" aria-label="Animation speed">
-        <button role="radio" data-speed="0.25" aria-label="Quarter speed">¼×</button>
-        <button role="radio" data-speed="0.5" aria-label="Half speed">½×</button>
-        <button role="radio" data-speed="1" aria-label="Normal speed">1×</button>
-        <button role="radio" data-speed="2" aria-label="Double speed">2×</button>
-        <button role="radio" data-speed="instant" aria-label="Instant, no animation">∞</button>
+        <button role="radio" data-speed="0.25" aria-label="Quarter speed">0.25x</button>
+        <button role="radio" data-speed="0.5" aria-label="Half speed">0.5x</button>
+        <button role="radio" data-speed="1" aria-label="Normal speed">1x</button>
+        <button role="radio" data-speed="2" aria-label="Double speed">2x</button>
       </div>
       <span class="sep" aria-hidden="true"></span>
 
@@ -103,19 +89,15 @@
       <button class="ctl" id="openBtn" data-tip="Open (Ctrl+O)">OPEN</button>
       <button class="ctl" id="saveBtn" data-tip="Save (Ctrl+S)">SAVE</button>
       <button class="btn-outline" id="analysisBtn" disabled data-tip="Run a program first">ANALYSIS</button>
-      </div>
-      <button class="ctl ctl-help" id="helpBtn" aria-label="Help" data-tip="Help (F1)">?</button>
-      <button class="engine" id="engineBtn" aria-haspopup="dialog">
-        <span class="engine-mark" aria-hidden="true"></span><span id="engineText">ENGINE …</span></button>
     </nav>
   </header>
 
   <main class="pages" id="pages">
 
-  <!-- ============================ §1 COVER ============================ -->
+  <!-- ============================ COVER ============================ -->
   <div class="page page-cover" id="pageCover" data-page="cover" hidden></div>
 
-  <!-- ============================ §2 WORKBENCH ============================ -->
+  <!-- ============================ WORKBENCH ============================ -->
   <div class="page page-workbench" id="pageWorkbench" data-page="workbench" hidden>
 
   <!-- ============================ PROGRAM ============================ -->
@@ -196,7 +178,7 @@
 
   </div>
 
-  <!-- ============================ §3 ANALYSIS ============================ -->
+  <!-- ============================ ANALYSIS ============================ -->
   <div class="page page-analysis" id="pageAnalysis" data-page="analysis" hidden></div>
 
   </main>
@@ -205,7 +187,6 @@
 
   <!-- ============================ OVERLAYS ============================ -->
   <aside class="help-sheet" id="helpDrawer" aria-label="Help" hidden></aside>
-  <div class="slip popover" id="enginePop" role="dialog" aria-label="CPU engine" hidden></div>
   <div class="slip hover-slip" id="errTip" role="tooltip" hidden></div>
   <div class="toast-host" id="toastHost" aria-live="polite"></div>
   <div class="dialog-backdrop" id="dialog" hidden></div>

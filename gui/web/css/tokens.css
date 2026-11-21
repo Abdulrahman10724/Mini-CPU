@@ -57,3 +57,8 @@
   --stroke: 1.5px;        /* diagram outlines */
   --stroke-active: 3px;   /* a wire carrying data right now */
 }
+
+/* short laptop screens (1366x768): a shorter signal trace leaves room for the figure */
+@media (max-height: 820px) {
+  :root { --trace-h: 246px; }
+}
