@@ -43,6 +43,7 @@ and screenshotted where MASM is not available. The header then shows a dashed re
 
     python gui/tests/test_result_parser.py     # parses every tests/*.expected.txt + bad files
     python gui/tests/test_analysis_stats.py    # the Analysis numbers for known test programs
+    python gui/tests/test_bridge_robust.py     # bad files, broken / slow / missing CPU engine
 
 ## Folder map
 
