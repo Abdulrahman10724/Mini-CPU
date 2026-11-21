@@ -3,7 +3,8 @@
 // counts of what result.txt says. This file only lays them out and draws them.
 
 import { api } from "./api.js";
-import { registerChart } from "./charts.js";
+import { registerChart, mixBars } from "./charts.js";
+import { programProfile } from "./profile.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -65,11 +66,25 @@ function build(s, res) {
             <tbody>${summaryRows(st)}</tbody>
           </table>
         </section>
-        <figure class="an-block an-fig4" id="fig4Block"></figure>
+        <figure class="an-block an-fig4">
+          <div class="chart-host" id="fig4"></div>
+          <div class="mix-key" aria-hidden="true">
+            <span><svg width="22" height="12"><rect width="22" height="12" fill="url(#hatchLight)"/></svg>data</span>
+            <span><svg width="22" height="12"><rect width="22" height="12" fill="url(#hatchDense)"/></svg>arithmetic</span>
+            <span><svg width="22" height="12"><rect width="22" height="12" fill="url(#hatchCross)"/></svg>compare</span>
+            <span><svg width="22" height="12"><rect width="22" height="12" fill="#1B1A17"/></svg>control</span>
+          </div>
+          <figcaption class="caption">Fig. 4 — Instruction mix: how many steps ran each instruction.</figcaption>
+        </figure>
         <figure class="an-block an-fig3">
           <div class="chart-host" id="fig3"></div>
           <figcaption class="caption">Fig. 3 — Register values per step (AX solid, BX dashed, CX dotted,
             DX dash-dot) with the Zero Flag below. Hover to read a step; click to open it in §2.</figcaption>
+        </figure>
+        <figure class="an-block an-fig5">
+          <div id="fig5"></div>
+          <figcaption class="caption">Fig. 5 — Program profile. Bars: how often each line ran.
+            Arrows: jumps that were taken, with their count. Click a line to open its last run in §2.</figcaption>
         </figure>
         <div class="an-rest" id="anRest"></div>
       </div>
@@ -102,6 +117,8 @@ function summaryRows(st) {
 }
 
 function drawCharts() {
+  mixBars($("fig4"), stats);
+  programProfile($("fig5"), stats, (line) => hooks.openLine(line));
   registerChart($("fig3"), stats, {
     describe: (k) => {
       const v = (r) => stats.values[r][k];
